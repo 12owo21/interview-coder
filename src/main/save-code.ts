@@ -1,5 +1,5 @@
 import { clipboard } from 'electron'
-import { mkdir, open, stat } from 'node:fs/promises'
+import { mkdir, open } from 'node:fs/promises'
 import { join, basename } from 'node:path'
 import { settings } from './settings'
 
@@ -49,6 +49,7 @@ const LANGUAGE_EXTENSIONS: Record<string, string> = {
   c: '.c',
   csharp: '.cs',
   cs: '.cs',
+  'c#': '.cs',
   javascript: '.js',
   js: '.js',
   node: '.js',
@@ -153,9 +154,10 @@ function sniffLanguage(code: string): string {
   if (/^\s*(def\s+\w+|class\s+\w+\s*(\(.*\))?\s*:)/m.test(code) || /\bprint\s*\(/.test(code)) {
     return 'python'
   }
-  if (/\bfunction\b|\bconst\s+\w+\s*=|=>/.test(code)) return 'javascript'
+  // Go and Rust before JavaScript: `const x =` and `=>` are valid in both too
   if (/^\s*package\s+main\b/m.test(code) || /\bfunc\s+\w+\s*\(/.test(code)) return 'go'
   if (/\bfn\s+\w+\s*\(/.test(code)) return 'rust'
+  if (/\bfunction\b|\bconst\s+\w+\s*=|=>/.test(code)) return 'javascript'
   return ''
 }
 
@@ -276,16 +278,6 @@ export async function saveCodeToDisk(answer: string): Promise<void> {
     console.log('Saved code to', filePath)
   } catch (error) {
     console.error('Failed to save code:', error)
-  }
-}
-
-/** Whether the configured code folder is usable, used to warn in the settings page */
-export async function isCodeSaveDirUsable(dir: string): Promise<boolean> {
-  try {
-    const info = await stat(dir)
-    return info.isDirectory()
-  } catch {
-    return false
   }
 }
 

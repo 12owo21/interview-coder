@@ -40,6 +40,8 @@ src/
 │   ├── settings.ts          # App settings object + IPC handlers
 │   ├── state.ts             # App state object + IPC handlers
 │   ├── take-screenshot.ts   # desktopCapturer → base64 PNG
+│   ├── save-screenshot.ts   # Optional auto-save of each screenshot to a folder
+│   ├── save-code.ts         # First code block of a finished answer → clipboard and/or source file
 │   ├── transcription.ts     # DashScope WebSocket real-time speech-to-text
 │   ├── window-resize.ts     # Cursor-tracking resize for the frameless windows
 │   ├── auto-updater.ts      # electron-updater (non-macOS only)
@@ -62,6 +64,7 @@ src/
         │   └── PrerequisitesChecker.tsx  # Modal for API key setup
         ├── settings/         # Settings page
         │   ├── index.tsx     # AI config, coding, appearance, shortcuts, privacy
+        │   ├── ApiProfiles.tsx     # Saved AI profiles: switch, add, rename, remove
         │   ├── ModelField.tsx      # Model row: picker + mismatch warning with one-click fix
         │   ├── SelectModel.tsx     # Model combobox that follows the API Base URL
         │   ├── SelectBaseURL.tsx   # API Base URL combobox (presets from lib/providers.ts)
@@ -88,9 +91,12 @@ src/
         │   ├── providers.ts  # Known platforms + each one's spelling of the same model
         │   ├── platform-models.ts # usePlatformModels(): cached `/models` list per URL + key
         │   ├── model-switch.ts    # changeApiBaseURL(): switch URL, toast the linked model change
+        │   ├── api-profiles.ts    # ApiProfile type + factory (one saved URL / key / model set)
+        │   ├── use-elapsed.ts     # Header timer: local tick while loading, main's measured value after
         │   ├── utils/
         │   │   ├── index.ts     # cn() helper, getCloneableFields()
         │   │   ├── env.ts       # isMac, platformAlt
+        │   │   ├── duration.ts  # formatDuration(): 3s / 1m05s
         │   │   └── keyboard.ts  # Accelerator string conversion
         │   └── audio-capture.ts # System audio capture via getDisplayMedia for transcription
         └── assets/
@@ -146,20 +152,24 @@ src/
 **Renderer → Main (invoke):**
 - `getAppSettings` / `updateAppSettings` — settings CRUD
 - `listModels` — fetch the model list of an OpenAI-compatible platform (runs in main to avoid CORS)
-- `updateAppState` — sync `inCoderPage`, `ignoreMouse`
+- `updateAppState` — sync `inCoderPage`, `inSettingsPage`
+- `setIgnoreMouse` — set click-through from the settings page switch
 - `initShortcuts` / `getShortcuts` / `updateShortcuts` — shortcut management
 - `stopSolutionStream` — abort current AI stream
 - `sendFollowUpQuestion` — follow-up within conversation
 - `triggerAction` / `setToolbarVisible` — overlay toolbar: run a shortcut action, toggle the window
+- `selectScreenshotDir` / `selectCodeDir` — folder pickers for the auto-save settings
 - `window-resize-start` / `window-resize-stop` (`send`, not `invoke`) — begin/end a cursor-tracked window resize
 - `start-transcription` / `stop-transcription` — speech transcription lifecycle
 - `get-transcription-text` / `clear-transcription-text` — read/clear accumulated text
 
 **Main → Renderer (send):**
-- `sync-app-state` — push state changes (e.g., mouse ignore toggle)
+- `sync-app-state` — push state changes (e.g., mouse ignore toggle) to both the main and the toolbar window
 - `screenshot-taken` / `screenshots-updated` — screenshot data (`screenshots-updated` also carries the untruncated conversation total)
 - `solution-clear` / `solution-chunk` / `solution-complete` / `solution-stopped` / `solution-error` — AI streaming lifecycle
 - `ai-loading-start` / `ai-loading-end` — loading state
+- `solution-duration` — how long the finished request took (ms), timed in main from the key press
+- `switch-api-profile` — step the active AI profile (`1` / `-1`); the list lives in the renderer store
 - `scroll-page-up` / `scroll-page-down` — keyboard-driven scroll
 - `toggle-transcription` — trigger start/stop transcription from shortcut
 - `sync-toolbar-settings` — push toolbar-only settings (hover dwell) into the toolbar window
@@ -169,9 +179,9 @@ src/
 
 | Store | File | Persisted | Key State |
 |-------|------|-----------|-----------|
-| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiBaseURL`, `apiKey`, `model`, `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes), `activeSceneId`, `customPrompt` (derived from active scene), `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `screenshotDisplay`, `dashscopeApiKey` |
-| `useShortcutsStore` | `lib/store/shortcuts.ts` | Yes (v5) | `shortcuts` (action → key mapping with categories) |
-| `useSolutionStore` | `lib/store/solution.ts` | No | `isLoading`, `solutionChunks`, `screenshotData`, `errorMessage` |
+| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiProfiles`, `activeProfileId`, `hasConfiguredApi`, `apiBaseURL`, `apiKey`, `model` (mirror of the active profile), `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes), `activeSceneId`, `customPrompt` (derived from active scene), `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `hideShortcutHints`, `screenshotDisplay`, `screenshotAutoSave`, `screenshotDir`, `codeAutoSave`, `codeSaveDir`, `codeFileBaseName`, `codeNamingMode`, `codeCopyToClipboard`, `dashscopeApiKey` |
+| `useShortcutsStore` | `lib/store/shortcuts.ts` | Yes (v5) | `shortcuts` (action → key mapping with categories); `merge` adds new default actions on every load, so a new shortcut needs no `version` bump |
+| `useSolutionStore` | `lib/store/solution.ts` | No | `isLoading`, `solutionChunks`, `screenshotData`, `errorMessage`, `durationMs` |
 | `useTranscriptionStore` | `lib/store/transcription.ts` | No | `isTranscribing`, `transcriptionText`, `errorMessage` |
 | `useAppStore` | `lib/store/app.ts` | No | `ignoreMouse` |
 
@@ -217,10 +227,13 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - All AI calls go through `src/main/ai.ts` using Vercel AI SDK's `streamText()`
 - Provider: `@ai-sdk/openai` with custom `baseURL` (works with any OpenAI-compatible API)
 - Model fallback: `Qwen/Qwen3-VL-32B-Instruct` for SiliconFlow, `gpt-5-mini` otherwise
+- AI profiles (`apiProfiles`): each holds its own URL / key / model, and the active one is mirrored onto the flat `apiBaseURL` / `apiKey` / `model` fields that main reads. The profile is authoritative (`reconcileApiProfiles()` restores the flat fields from it on load), so never write those three with `updateSetting`: use `updateCredential()`, `changeApiBaseURL()` or `setModel()`, which keep the profile in step — otherwise the edit is lost on the next profile switch or restart
+- The welcome dialog (`PrerequisitesChecker`) shows only until a key has ever been saved (`hasConfiguredApi`), so a request made with a blank profile key is reported by main as a `solution-error` instead
 - Model ↔ API Base URL linkage lives in the renderer (`lib/providers.ts`): each platform spells the same model differently (`deepseek-flash` vs `deepseek/deepseek-v4.1-flash`), so the picker lists the selected platform's spelling and `setApiBaseURL()` translates the model on switch (else restores the one last used with that URL, else the platform default). Change the API Base URL through `changeApiBaseURL()`, not `updateSetting`, so the model follows and the user gets an undo toast. Preset models must accept image input
 - System prompts are maintained in the renderer settings store (`PRESET_SCENE_PROMPTS` in `lib/store/settings.ts`) as "prompt scenes"; the active scene's prompt is synced to the main process as `customPrompt`
 - Three streaming functions: `getSolutionStream` (first screenshot), `getFollowUpStream` (follow-up), `getGeneralStream` (multi-screenshot)
 - Conversation history (`conversationMessages`) is maintained in `shortcuts.ts` as `ModelMessage[]`
+- When an answer finishes naturally (not stopped, not failed), `handleGeneratedCode()` in `save-code.ts` copies its first code block to the clipboard and/or saves it as `<base><n>.<ext>` (extension from the fence language); both are opt-in and silent
 
 ### Stream Abort Pattern
 
@@ -246,6 +259,13 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - On Windows, `Alt`-based shortcuts also register `Ctrl+Alt` variant for compatibility
 - Shortcut actions are string-keyed callbacks in `shortcuts.ts`
 - Default shortcuts use `platformAlt` (`Alt` on macOS, `CommandOrControl` on Windows)
+- New actions also need a label in `settings/CustomShortcuts.tsx` and a description in `help/Shortcuts.tsx`
+
+### Mouse Click-through
+
+- `state.ignoreMouse` is the user's preference; `applyIgnoreMouse()` in `shortcuts.ts` is the only place that applies it to the window. Go through `setIgnoreMouse()` / `applyIgnoreMouse()`, never `setIgnoreMouseEvents()` directly
+- It is suspended while the settings page is up (`inSettingsPage`): the switch that turns it off lives there, so applying it would trap the user. The preference is kept and applied on the way out
+- Independent of the overlay toolbar, and the shortcut works on every page as an escape hatch
 
 ### UI Component Patterns
 

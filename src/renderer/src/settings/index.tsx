@@ -749,8 +749,10 @@ export default function SettingsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sequence">依次编号（Test1、Test2）</SelectItem>
-                      <SelectItem value="overwrite">覆盖同一个文件（Test）</SelectItem>
+                      <SelectItem value="sequence">
+                        依次编号（{baseNamePreview}1、{baseNamePreview}2）
+                      </SelectItem>
+                      <SelectItem value="overwrite">覆盖同一个文件（{baseNamePreview}）</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

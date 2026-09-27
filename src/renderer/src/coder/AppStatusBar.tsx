@@ -45,7 +45,9 @@ export function AppStatusBar() {
     setQuestionInput('')
 
     try {
-      await window.api.sendFollowUpQuestion(question)
+      const result = await window.api.sendFollowUpQuestion(question)
+      // Rejected before streaming (e.g. no API key), so no event will end the spinner
+      if (!result?.success) setIsLoading(false)
     } catch (error) {
       console.error('Error sending follow-up question:', error)
       setIsLoading(false)

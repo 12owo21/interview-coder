@@ -39,10 +39,7 @@ export function AppHeader() {
           timer  shrink-0        never compressed — it exists nowhere else
       */}
       {elapsed !== null && (
-        <span
-          className="shrink-0 whitespace-nowrap pl-2 text-xs tabular-nums opacity-70 pointer-events-none"
-          title={`本次耗时 ${formatDuration(elapsed)}`}
-        >
+        <span className="shrink-0 whitespace-nowrap pl-2 text-xs tabular-nums opacity-70 pointer-events-none">
           {formatDuration(elapsed)}
         </span>
       )}
@@ -57,7 +54,6 @@ export function AppHeader() {
         <span
           className="min-w-0 truncate pr-2 text-[10px] opacity-60 pointer-events-none"
           style={{ flex: '0 4 auto', minWidth: 0 }}
-          title={model}
         >
           {model}
         </span>

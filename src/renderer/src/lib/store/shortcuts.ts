@@ -185,14 +185,11 @@ export const useShortcutsStore = create<ShortcutsStore>()(
         // Shortcuts added after this user last saved must still appear, so the
         // defaults are the floor and the stored bindings win on top of them.
         // `merge` runs on every rehydrate, unlike `migrate` which only runs
-        // when the version changes.
+        // when the version changes. Stored actions that no longer exist are dropped.
         const shortcuts = { ...current.shortcuts }
         for (const [action, shortcut] of Object.entries(stored)) {
           if (shortcuts[action]) shortcuts[action] = shortcut
         }
-        // `switchApiProfile` was replaced by previous/nextApiProfile; drop it
-        // so a stale binding cannot be recorded, nor linger in localStorage
-        delete (shortcuts as Record<string, unknown>).switchApiProfile
         return { ...current, shortcuts }
       }
     }

@@ -78,6 +78,9 @@ function patchProfile(
   return profiles.map((p) => (p.id === id ? { ...p, ...patch } : p))
 }
 
+/** The live fields that are a mirror of the active profile */
+const CREDENTIAL_KEYS = ['apiBaseURL', 'apiKey', 'model'] as const
+
 /** Same as `patchProfile`, but a no-op when `id` matches nothing */
 function patchActiveProfile(
   profiles: ApiProfile[],
@@ -432,6 +435,14 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       syncSettings: (settings) => {
         set(settings)
+        // Credentials filled in from main (.env) belong to the active profile too
+        const credentials = Object.fromEntries(
+          CREDENTIAL_KEYS.filter((key) => settings[key] !== undefined).map((key) => [
+            key,
+            settings[key]
+          ])
+        )
+        if (Object.keys(credentials).length > 0) get().updateCredential(credentials)
       },
       setActiveScene: (id) => {
         set((state) => ({

@@ -177,11 +177,12 @@ function restoreSoftHiddenWindow(window: BrowserWindow) {
 
   applyContentProtection(window, true)
   window.setPosition(...softHiddenPosition)
-  window.setIgnoreMouseEvents(state.ignoreMouse)
   window.setOpacity(1)
 
   isWindowSoftHidden = false
   softHiddenPosition = null
+  // Not the raw preference: it stays suspended if this is the settings page
+  applyIgnoreMouse()
   showToolbar()
   keepWindowInFront(window)
 }
@@ -255,8 +256,18 @@ function abortCurrentStream(reason: AbortReason) {
  */
 function applyIgnoreMouse(): void {
   const mainWindow = global.mainWindow
-  if (!mainWindow || mainWindow.isDestroyed()) return
+  // A soft-hidden window ignores the mouse regardless; it is reapplied on restore
+  if (!mainWindow || mainWindow.isDestroyed() || isWindowSoftHidden) return
   mainWindow.setIgnoreMouseEvents(state.ignoreMouse && !state.inSettingsPage)
+}
+
+/**
+ * Explain why a request was not sent. The welcome dialog used to cover a blank
+ * key, but it now shows only once, so switching to a profile without a key
+ * would otherwise leave the shortcut doing nothing at all.
+ */
+function reportMissingApiKey(mainWindow: BrowserWindow): void {
+  mainWindow.webContents.send('solution-error', '当前 AI 配置未填写 API Key，请到设置页填写')
 }
 
 /** Tell both renderers what the window is actually doing */
@@ -278,8 +289,9 @@ function broadcastAppState(): void {
 export function setIgnoreMouse(ignore: boolean): void {
   state.ignoreMouse = ignore
   applyIgnoreMouse()
-  // Keep the toolbar visible if it is wanted, so its button stays reachable
-  showToolbar()
+  // Keep the toolbar visible if it is wanted, so its button stays reachable;
+  // a soft-hidden window still counts as visible, so check that separately
+  if (!isWindowSoftHidden) showToolbar()
   broadcastAppState()
 }
 
@@ -348,7 +360,8 @@ const callbacks: Record<string, () => void> = {
 
   takeScreenshot: async () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage || !settings.apiKey) return
+    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!settings.apiKey) return reportMissingApiKey(mainWindow)
 
     abortCurrentStream('new-request')
     // Timing covers the whole wait the user experiences: capture + request + render
@@ -469,7 +482,8 @@ const callbacks: Record<string, () => void> = {
   // Append screenshot for continuous capture (if conversation exists)
   appendScreenshot: async () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage || !settings.apiKey) return
+    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!settings.apiKey) return reportMissingApiKey(mainWindow)
 
     // Fallback to first screenshot if no conversation
     if (conversationMessages.length === 0) {
@@ -807,8 +821,12 @@ ipcMain.handle('setIgnoreMouse', (_event, ignore: boolean) => {
 
 ipcMain.handle('sendFollowUpQuestion', async (_event, question: string) => {
   const mainWindow = global.mainWindow
-  if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage || !settings.apiKey) {
+  if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) {
     return { success: false, error: 'Invalid state' }
+  }
+  if (!settings.apiKey) {
+    reportMissingApiKey(mainWindow)
+    return { success: false, error: 'Missing API key' }
   }
 
   // Validate that there's an active conversation

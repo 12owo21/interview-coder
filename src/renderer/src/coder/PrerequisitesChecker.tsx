@@ -14,7 +14,7 @@ function hasAnyKeyStored(): boolean {
 
 export function PrerequisitesChecker() {
   const navigate = useNavigate()
-  const { apiKey, apiBaseURL, hasConfiguredApi, updateSetting } = useSettingsStore()
+  const { apiKey, apiBaseURL, hasConfiguredApi, updateCredential } = useSettingsStore()
   const [inputApiKey, setInputApiKey] = useState(apiKey)
   const [inputApiBaseURL, setInputApiBaseURL] = useState(apiBaseURL)
   const [showApiKey, setShowApiKey] = useState(false)
@@ -32,7 +32,8 @@ export function PrerequisitesChecker() {
 
   const saveApiKey = () => {
     if (inputApiKey.trim()) {
-      updateSetting('apiKey', inputApiKey.trim())
+      // Through the active profile, or the key is lost on the next profile switch
+      updateCredential({ apiKey: inputApiKey.trim() })
     }
     if (inputApiBaseURL.trim()) {
       // Also picks a model in this platform's spelling, so first use works out of the box
