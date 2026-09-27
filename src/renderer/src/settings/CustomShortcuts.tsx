@@ -92,6 +92,11 @@ export function CustomShortcuts() {
             shortcut="appendScreenshot"
           />
           <Shortcut
+            label="框选截图区域"
+            description="重新框选截图时只截的区域，Enter 确认、Esc 取消"
+            shortcut="pickCaptureRegion"
+          />
+          <Shortcut
             label="停止生成"
             description="打断当前正在生成的解题建议"
             shortcut="stopSolutionStream"

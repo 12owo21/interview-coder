@@ -64,6 +64,7 @@ const api = {
       | 'moveMainWindowRight'
       | 'toggleTranscription'
       | 'clearTranscription'
+      | 'pickCaptureRegion'
   ) => ipcRenderer.invoke('triggerAction', action),
   setToolbarVisible: (visible: boolean) => ipcRenderer.invoke('setToolbarVisible', visible),
   // Set click-through from the settings page; returns the state main ended up in
@@ -219,6 +220,13 @@ const api = {
     ipcRenderer.invoke('getRegionPickerData') as Promise<RegionPickerData | null>,
   regionPickerReady: () => ipcRenderer.send('region-picker-ready'),
   finishRegionPicker: (rect: RegionRect | null) => ipcRenderer.send('finish-region-picker', rect),
+  // A new capture region was picked (from any entry point); the store persists it
+  onCaptureRegionPicked: (callback: (region: CaptureRegion) => void) => {
+    ipcRenderer.on('capture-region-picked', (_event, region: CaptureRegion) => callback(region))
+  },
+  removeCaptureRegionPickedListener: () => {
+    ipcRenderer.removeAllListeners('capture-region-picked')
+  },
   // Select screenshot save directory
   selectScreenshotDir: () => ipcRenderer.invoke('selectScreenshotDir') as Promise<string | null>,
   // Select the directory the generated code is written to

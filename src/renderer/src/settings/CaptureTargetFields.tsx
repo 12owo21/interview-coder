@@ -56,11 +56,12 @@ export function CaptureTargetFields() {
   const regionSize =
     captureRegion && regionIndex >= 0 && regionToPixels(captureRegion, displays[regionIndex])
 
+  // The result reaches the store through App's `onCaptureRegionPicked`, the
+  // same way as a pick started from the toolbar or the shortcut
   const pickRegion = async () => {
     setPicking(true)
     try {
-      const region = await window.api.pickCaptureRegion()
-      if (region) updateSetting('captureRegion', region)
+      await window.api.pickCaptureRegion()
     } finally {
       setPicking(false)
     }

@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { BrowserWindow, desktopCapturer, ipcMain, screen, type Display } from 'electron'
+import { app, BrowserWindow, desktopCapturer, ipcMain, screen, type Display } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { CaptureRegion, RegionRect } from '../shared/capture-region'
 import { findScreenSource, settingsResolution } from './take-screenshot'
@@ -26,6 +26,8 @@ const PICKER_RELATIVE_LEVEL = 200
 /** Last resort against a picker that never answers: it covers every screen */
 const PICKER_TIMEOUT = 5 * 60 * 1000
 
+/** Set before the first await, so a second request cannot slip in while the screens are captured */
+let active = false
 let pickers: Picker[] = []
 let savedRegion: CaptureRegion | null = null
 let settle: ((region: CaptureRegion | null) => void) | null = null
@@ -40,7 +42,8 @@ let timeout: NodeJS.Timeout | null = null
 export async function pickCaptureRegion(
   current: CaptureRegion | null
 ): Promise<CaptureRegion | null> {
-  if (settle) return null
+  if (active) return null
+  active = true
 
   const displays = screen.getAllDisplays()
   // Sized for the densest screen, so no background is blurrier than the screen under it
@@ -48,7 +51,13 @@ export async function pickCaptureRegion(
     width: Math.max(...displays.map((d) => Math.round(d.size.width * d.scaleFactor))),
     height: Math.max(...displays.map((d) => Math.round(d.size.height * d.scaleFactor)))
   }
-  const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize })
+  let sources: Electron.DesktopCapturerSource[]
+  try {
+    sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize })
+  } catch (error) {
+    active = false
+    throw error
+  }
 
   return new Promise((resolve) => {
     settle = resolve
@@ -84,6 +93,9 @@ function createPickerWindow(display: Display): BrowserWindow {
     skipTaskbar: true,
     hiddenInMissionControl: true,
     hasShadow: false,
+    // Started from a shortcut the app is in the background, and the first
+    // click would otherwise only bring the window forward instead of dragging
+    acceptFirstMouse: true,
     backgroundColor: '#000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -118,6 +130,7 @@ function finish(region: CaptureRegion | null): void {
   const resolve = settle
   if (!resolve) return
   settle = null
+  active = false
   if (timeout) clearTimeout(timeout)
   timeout = null
 
@@ -149,9 +162,13 @@ ipcMain.on('region-picker-ready', (event) => {
   const picker = pickerOf(event.sender)
   if (!picker) return
   picker.window.show()
-  // Keyboard goes to the screen the user is on, for Enter / Esc
+  // Keyboard goes to the screen the user is on, for Enter / Esc. Started from a
+  // shortcut or the toolbar, another app is active; unless this one takes over,
+  // the Enter meant to confirm would land in that app, e.g. submit an exam page
   const cursor = screen.getCursorScreenPoint()
-  if (screen.getDisplayNearestPoint(cursor).id === picker.display.id) picker.window.focus()
+  if (screen.getDisplayNearestPoint(cursor).id !== picker.display.id) return
+  if (process.platform === 'darwin') app.focus({ steal: true })
+  picker.window.focus()
 })
 
 /** A usable area: inside the screen and not empty */

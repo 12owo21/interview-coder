@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleStop,
+  Crop,
   ImagePlus,
   Mic,
   MousePointer2,
@@ -34,6 +35,7 @@ export type ToolbarAction = {
 export const TOOLBAR_ACTIONS: ToolbarAction[] = [
   { action: 'takeScreenshot', Icon: Camera, label: '截图解题（新开对话）' },
   { action: 'appendScreenshot', Icon: ImagePlus, label: '追加截图' },
+  { action: 'pickCaptureRegion', Icon: Crop, label: '框选截图区域' },
   { action: 'stopSolutionStream', Icon: CircleStop, label: '停止生成' },
   { action: 'ignoreOrEnableMouse', Icon: MousePointer2, label: '切换鼠标穿透' },
   { action: 'pageUp', Icon: ChevronUp, label: '向上翻页' },

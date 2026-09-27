@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { HashRouter, Routes, Route, useLocation } from 'react-router'
-import { Toaster } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import CoderPage from '@/coder'
 import SettingsPage from '@/settings'
 import HelpPage from '@/help'
@@ -47,6 +47,16 @@ export default function App() {
       window.api.updateAppSettings(getCloneableFields(settingsStore))
     }
   }, [initialized, settingsStore])
+
+  // A region picked from the settings page, the toolbar or the shortcut: main
+  // applies it at once, the store persists it. Only the main window is told
+  useEffect(() => {
+    window.api.onCaptureRegionPicked((region) => {
+      useSettingsStore.getState().updateSetting('captureRegion', region)
+      toast('截图区域已更新，之后只截这块区域')
+    })
+    return () => window.api.removeCaptureRegionPickedListener()
+  }, [])
 
   useEffect(() => {
     console.log('App initShortcuts:', shortcuts) // DEBUG: 检查新键

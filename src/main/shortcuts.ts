@@ -11,6 +11,7 @@ import {
 } from './toolbar-window'
 import { takeScreenshot } from './take-screenshot'
 import { pickCaptureRegion } from './region-picker'
+import type { CaptureRegion } from '../shared/capture-region'
 import { saveScreenshotToDisk } from './save-screenshot'
 import { handleGeneratedCode } from './save-code'
 import { getSolutionStream, getFollowUpStream, getGeneralStream } from './ai'
@@ -328,6 +329,32 @@ function reportDuration() {
   const mainWindow = global.mainWindow
   if (!mainWindow || mainWindow.isDestroyed()) return
   mainWindow.webContents.send('solution-duration', elapsed)
+}
+
+/**
+ * Let the user drag out a new capture region, from the settings page, the
+ * toolbar or the shortcut. The result applies here at once, and goes to the
+ * renderer too, whose store is what persists it.
+ */
+async function pickRegion(): Promise<CaptureRegion | null> {
+  const mainWindow = global.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed()) return null
+  // Out of the way while the user drags: it would cover part of the screen, and
+  // the top-most guard would keep lifting it back above the picker. A window
+  // that was already soft-hidden, by the user or by a pick in progress, is
+  // left for whoever hid it to bring back.
+  const wasHidden = isWindowSoftHidden
+  softHideWindow(mainWindow)
+  try {
+    const region = await pickCaptureRegion(settings.captureRegion)
+    if (region) {
+      settings.captureRegion = region
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.send('capture-region-picked', region)
+    }
+    return region
+  } finally {
+    if (!wasHidden) restoreSoftHiddenWindow(mainWindow)
+  }
 }
 
 const callbacks: Record<string, () => void> = {
@@ -699,6 +726,11 @@ const callbacks: Record<string, () => void> = {
     if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
     clearTranscriptionText()
     mainWindow.webContents.send('transcription-cleared')
+  },
+
+  // Works on every page: it only sets up future screenshots
+  pickCaptureRegion: () => {
+    void pickRegion()
   }
 }
 
@@ -716,7 +748,8 @@ const clickableActions = new Set([
   'moveMainWindowLeft',
   'moveMainWindowRight',
   'toggleTranscription',
-  'clearTranscription'
+  'clearTranscription',
+  'pickCaptureRegion'
 ])
 
 function unregisterShortcut(action: string) {
@@ -820,18 +853,7 @@ ipcMain.handle('setIgnoreMouse', (_event, ignore: boolean) => {
   return state.ignoreMouse
 })
 
-ipcMain.handle('pickCaptureRegion', async () => {
-  const mainWindow = global.mainWindow
-  if (!mainWindow || mainWindow.isDestroyed()) return null
-  // Out of the way while the user drags: it would cover part of the screen, and
-  // the top-most guard would keep lifting it back above the picker
-  softHideWindow(mainWindow)
-  try {
-    return await pickCaptureRegion(settings.captureRegion)
-  } finally {
-    restoreSoftHiddenWindow(mainWindow)
-  }
-})
+ipcMain.handle('pickCaptureRegion', () => pickRegion())
 
 ipcMain.handle('sendFollowUpQuestion', async (_event, question: string) => {
   const mainWindow = global.mainWindow

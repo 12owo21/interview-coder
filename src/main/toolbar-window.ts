@@ -2,7 +2,8 @@ import { join } from 'node:path'
 import { BrowserWindow, screen } from 'electron'
 import { is } from '@electron-toolkit/utils'
 
-const TOOLBAR_WIDTH = 404
+/** Room for every toolbar button: 14 × 28px, 2px gaps, 8px padding each side */
+const TOOLBAR_WIDTH = 434
 const TOOLBAR_HEIGHT = 44
 const TOOLBAR_INSET = 4
 /** Mirrors the renderer's default opacity setting, until the renderer syncs the real one */

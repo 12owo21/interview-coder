@@ -66,6 +66,11 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
     key: `${platformAlt}+Shift+Enter`,
     category: 'Screenshot & AI'
   },
+  pickCaptureRegion: {
+    action: 'pickCaptureRegion',
+    key: `${platformAlt}+Shift+R`,
+    category: 'Screenshot & AI'
+  },
   stopSolutionStream: {
     action: 'stopSolutionStream',
     key: `${platformAlt}+.`,

@@ -61,6 +61,7 @@ const getShortcutDescription = (action: string) => {
     decreaseOpacity: '提高透明度(窗口更透明)',
     takeScreenshot: '截图并生成解题建议（会新开对话）',
     appendScreenshot: '追加截图并生成解题建议',
+    pickCaptureRegion: '框选截图区域（之后只截这块）',
     stopSolutionStream: '停止生成',
     previousApiProfile: '切换到上一个 AI 配置',
     nextApiProfile: '切换到下一个 AI 配置',
