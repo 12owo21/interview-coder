@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { buildRequestHeaders } from '../shared/request-headers'
 
 export interface PlatformModel {
   id: string
@@ -18,6 +19,8 @@ export interface ListModelsOptions {
   /** Query string for `/models` */
   query?: string
   visionCatalog?: VisionCatalog
+  /** The profile's custom request headers, as typed in settings */
+  headers?: string
 }
 
 /** What @ai-sdk/openai calls when no base URL is set */
@@ -31,7 +34,7 @@ const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 async function listModels(
   baseURL: string,
   apiKey: string,
-  { query, visionCatalog }: ListModelsOptions = {}
+  { query, visionCatalog, headers }: ListModelsOptions = {}
 ): Promise<ModelListResult> {
   // Started up front so it downloads alongside the model list
   const visionFlags = visionCatalog ? VISION_CATALOGS[visionCatalog]() : undefined
@@ -41,7 +44,7 @@ async function listModels(
   let res: Response
   try {
     res = await fetch(url, {
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+      headers: buildRequestHeaders(apiKey, headers),
       signal: AbortSignal.timeout(10_000)
     })
   } catch (err) {

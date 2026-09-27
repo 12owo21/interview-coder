@@ -11,6 +11,8 @@ export interface ApiProfile {
   name: string
   apiBaseURL: string
   apiKey: string
+  /** Extra request headers some platforms need, one `Name: Value` per line */
+  apiHeaders: string
   model: string
 }
 
@@ -29,6 +31,7 @@ export function createProfile(partial?: Partial<ApiProfile>): ApiProfile {
     name: partial?.name || '新配置',
     apiBaseURL: baseURL,
     apiKey: partial?.apiKey ?? '',
+    apiHeaders: partial?.apiHeaders ?? '',
     model: partial?.model ?? findProvider(baseURL)?.defaultModel ?? ''
   }
 }

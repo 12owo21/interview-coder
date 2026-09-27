@@ -25,8 +25,15 @@ import { useSettingsStore } from '@/lib/store/settings'
  * does not disturb the others.
  */
 export function ApiProfiles() {
-  const { apiProfiles, activeProfileId, apiKey, apiBaseURL, setActiveProfile, addProfile } =
-    useSettingsStore()
+  const {
+    apiProfiles,
+    activeProfileId,
+    apiKey,
+    apiBaseURL,
+    apiHeaders,
+    setActiveProfile,
+    addProfile
+  } = useSettingsStore()
   const [addOpen, setAddOpen] = useState(false)
   const [newName, setNewName] = useState('')
 
@@ -44,7 +51,7 @@ export function ApiProfiles() {
         <label className="text-sm font-medium">
           当前配置
           <span className="ml-2 text-xs font-light">
-            每个配置保存一组 API 地址、密钥和模型，切换时可分别使用
+            每个配置保存一组 API 地址、密钥、请求头和模型，切换时可分别使用
           </span>
         </label>
         <div className="flex items-center gap-1">
@@ -74,7 +81,12 @@ export function ApiProfiles() {
 
       <ProfileList />
 
-      <SaveStatus apiKey={apiKey} apiBaseURL={apiBaseURL} activeProfileId={activeProfileId} />
+      <SaveStatus
+        apiKey={apiKey}
+        apiBaseURL={apiBaseURL}
+        apiHeaders={apiHeaders}
+        activeProfileId={activeProfileId}
+      />
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
@@ -117,10 +129,12 @@ export function ApiProfiles() {
 function SaveStatus({
   apiKey,
   apiBaseURL,
+  apiHeaders,
   activeProfileId
 }: {
   apiKey: string
   apiBaseURL: string
+  apiHeaders: string
   activeProfileId: string
 }) {
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -141,7 +155,7 @@ function SaveStatus({
       clearTimeout(done)
     }
     // Switching profiles re-reads the fields and counts as a change too
-  }, [apiKey, apiBaseURL, activeProfileId])
+  }, [apiKey, apiBaseURL, apiHeaders, activeProfileId])
 
   if (state === 'idle') return null
 

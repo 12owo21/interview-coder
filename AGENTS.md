@@ -49,6 +49,8 @@ src/
 ├── preload/
 │   ├── index.ts             # contextBridge API: exposes window.api to renderer
 │   └── index.d.ts           # Type declarations for window.electron and window.api
+├── shared/                  # Pure TS used by both main and renderer (no Electron / DOM / Node imports)
+│   └── request-headers.ts   # Parse the custom request headers text, merge it over the Bearer key
 └── renderer/
     ├── index.html            # SPA entry
     └── src/
@@ -66,6 +68,7 @@ src/
         │   ├── index.tsx     # AI config, coding, appearance, shortcuts, privacy
         │   ├── ApiProfiles.tsx     # Saved AI profiles: switch, add, rename, remove
         │   ├── ModelField.tsx      # Model row: picker + mismatch warning with one-click fix
+        │   ├── ApiHeadersField.tsx # Custom request headers textarea + ignored-line warning
         │   ├── SelectModel.tsx     # Model combobox that follows the API Base URL
         │   ├── SelectBaseURL.tsx   # API Base URL combobox (presets from lib/providers.ts)
         │   └── CustomShortcuts.tsx # Shortcut key recorder
@@ -179,7 +182,7 @@ src/
 
 | Store | File | Persisted | Key State |
 |-------|------|-----------|-----------|
-| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiProfiles`, `activeProfileId`, `hasConfiguredApi`, `apiBaseURL`, `apiKey`, `model` (mirror of the active profile), `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes), `activeSceneId`, `customPrompt` (derived from active scene), `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `hideShortcutHints`, `screenshotDisplay`, `screenshotAutoSave`, `screenshotDir`, `codeAutoSave`, `codeSaveDir`, `codeFileBaseName`, `codeNamingMode`, `codeCopyToClipboard`, `dashscopeApiKey` |
+| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiProfiles`, `activeProfileId`, `hasConfiguredApi`, `apiBaseURL`, `apiKey`, `apiHeaders`, `model` (mirror of the active profile), `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes), `activeSceneId`, `customPrompt` (derived from active scene), `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `hideShortcutHints`, `screenshotDisplay`, `screenshotAutoSave`, `screenshotDir`, `codeAutoSave`, `codeSaveDir`, `codeFileBaseName`, `codeNamingMode`, `codeCopyToClipboard`, `dashscopeApiKey` |
 | `useShortcutsStore` | `lib/store/shortcuts.ts` | Yes (v5) | `shortcuts` (action → key mapping with categories); `merge` adds new default actions on every load, so a new shortcut needs no `version` bump |
 | `useSolutionStore` | `lib/store/solution.ts` | No | `isLoading`, `solutionChunks`, `screenshotData`, `errorMessage`, `durationMs` |
 | `useTranscriptionStore` | `lib/store/transcription.ts` | No | `isTranscribing`, `transcriptionText`, `errorMessage` |
@@ -226,8 +229,9 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 
 - All AI calls go through `src/main/ai.ts` using Vercel AI SDK's `streamText()`
 - Provider: `@ai-sdk/openai` with custom `baseURL` (works with any OpenAI-compatible API)
+- Custom request headers (`apiHeaders`, one `Name: Value` per line) go on every AI request and on the `/models` fetch, through `buildRequestHeaders()` in `src/shared/request-headers.ts`. They override the Bearer key case-insensitively, so a gateway can replace `Authorization`
 - Model fallback: `Qwen/Qwen3-VL-32B-Instruct` for SiliconFlow, `gpt-5-mini` otherwise
-- AI profiles (`apiProfiles`): each holds its own URL / key / model, and the active one is mirrored onto the flat `apiBaseURL` / `apiKey` / `model` fields that main reads. The profile is authoritative (`reconcileApiProfiles()` restores the flat fields from it on load), so never write those three with `updateSetting`: use `updateCredential()`, `changeApiBaseURL()` or `setModel()`, which keep the profile in step — otherwise the edit is lost on the next profile switch or restart
+- AI profiles (`apiProfiles`): each holds its own URL / key / headers / model, and the active one is mirrored onto the flat `apiBaseURL` / `apiKey` / `apiHeaders` / `model` fields that main reads. The profile is authoritative (`reconcileApiProfiles()` restores the flat fields from it on load), so never write those four with `updateSetting`: use `updateCredential()`, `changeApiBaseURL()` or `setModel()`, which keep the profile in step — otherwise the edit is lost on the next profile switch or restart
 - The welcome dialog (`PrerequisitesChecker`) shows only until a key has ever been saved (`hasConfiguredApi`), so a request made with a blank profile key is reported by main as a `solution-error` instead
 - Model ↔ API Base URL linkage lives in the renderer (`lib/providers.ts`): each platform spells the same model differently (`deepseek-flash` vs `deepseek/deepseek-v4.1-flash`), so the picker lists the selected platform's spelling and `setApiBaseURL()` translates the model on switch (else restores the one last used with that URL, else the platform default). Change the API Base URL through `changeApiBaseURL()`, not `updateSetting`, so the model follows and the user gets an undo toast. Preset models must accept image input
 - System prompts are maintained in the renderer settings store (`PRESET_SCENE_PROMPTS` in `lib/store/settings.ts`) as "prompt scenes"; the active scene's prompt is synced to the main process as `customPrompt`
@@ -323,7 +327,7 @@ These are read by dotenv in the main process and merged with renderer-side setti
 
 4. **Settings flow**: `.env` → main process `settings` object → renderer reads on mount via IPC → renderer persists to localStorage via Zustand. Renderer-side changes are sent back to main via `updateAppSettings`.
 
-5. **No shared types directory**: Main process types (`AppSettings`, `AppState`) are imported directly by the preload script from `../main/settings` and `../main/state`. This works because preload shares the Node.js tsconfig.
+5. **No shared types directory**: Main process types (`AppSettings`, `AppState`) are imported directly by the preload script from `../main/settings` and `../main/state`. This works because preload shares the Node.js tsconfig. Runtime code both sides need goes in `src/shared/` (included by both tsconfigs, imported by relative path) and must stay free of Electron, DOM and Node APIs.
 
 6. **Streaming orchestration is in `shortcuts.ts`**: Despite the filename, this 580+ line file is the central orchestrator for both global shortcuts AND AI streaming logic. It manages conversation history, abort controllers, and IPC communication for the entire AI workflow.
 

@@ -1,11 +1,20 @@
 import { streamText, type ModelMessage } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { settings, AppSettings } from './settings'
+import { buildRequestHeaders } from '../shared/request-headers'
 
 // The system prompt is fully managed by the renderer (prompt scenes in the
 // settings store) and synced here via updateAppSettings on app startup
 function getSystemPrompt(extra?: string) {
   return [settings.customPrompt, extra].filter(Boolean).join('\n\n') || undefined
+}
+
+function createProvider() {
+  return createOpenAI({
+    baseURL: settings.apiBaseURL,
+    apiKey: settings.apiKey,
+    headers: buildRequestHeaders(settings.apiKey, settings.apiHeaders)
+  })
 }
 
 function getModel(_settings: AppSettings) {
@@ -16,10 +25,7 @@ function getModel(_settings: AppSettings) {
 }
 
 export function getSolutionStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
-  const openai = createOpenAI({
-    baseURL: settings.apiBaseURL,
-    apiKey: settings.apiKey
-  })
+  const openai = createProvider()
 
   const { textStream } = streamText({
     model: openai.chat(getModel(settings)),
@@ -38,10 +44,7 @@ export function getFollowUpStream(
   userQuestion: string,
   abortSignal?: AbortSignal
 ) {
-  const openai = createOpenAI({
-    baseURL: settings.apiBaseURL,
-    apiKey: settings.apiKey
-  })
+  const openai = createProvider()
 
   // Add the user's follow-up question to the conversation
   const updatedMessages: ModelMessage[] = [
@@ -70,10 +73,7 @@ export function getFollowUpStream(
 }
 
 export function getGeneralStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
-  const openai = createOpenAI({
-    baseURL: settings.apiBaseURL,
-    apiKey: settings.apiKey
-  })
+  const openai = createProvider()
 
   const { textStream } = streamText({
     model: openai.chat(getModel(settings)),

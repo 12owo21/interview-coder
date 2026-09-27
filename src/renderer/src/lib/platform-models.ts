@@ -9,7 +9,7 @@ export type PlatformModelsState =
 
 type ModelListResult = { models: PlatformModel[] } | { error: string }
 
-/** Session cache keyed by URL + key; failures are dropped so a retry refetches */
+/** Session cache keyed by URL + key + headers; failures are dropped so a retry refetches */
 const cache = new Map<string, Promise<ModelListResult>>()
 
 /** Wait for typing in the URL / API Key fields to settle before hitting the network */
@@ -17,15 +17,15 @@ const FETCH_DELAY_MS = 600
 
 /**
  * The model list the platform behind `baseURL` reports, fetched once per
- * URL + key for the session. Stays `idle` while an API key is required but missing.
+ * URL + key + headers for the session. Stays `idle` while an API key is required but missing.
  */
-export function usePlatformModels(baseURL: string, apiKey: string) {
+export function usePlatformModels(baseURL: string, apiKey: string, headers: string) {
   const [state, setState] = useState<PlatformModelsState>({ status: 'idle' })
   const [attempt, setAttempt] = useState(0)
 
   const url = normalizeBaseURL(baseURL)
   const key = apiKey.trim()
-  const cacheKey = `${url}\n${key}`
+  const cacheKey = `${url}\n${key}\n${headers}`
   const provider = findProvider(url)
   const canFetch = !!key || !!provider?.publicModelList
   const query = provider?.modelListQuery
@@ -42,7 +42,7 @@ export function usePlatformModels(baseURL: string, apiKey: string) {
       let request = cache.get(cacheKey)
       if (!request) {
         request = window.api
-          .listModels(url, key, { query, visionCatalog })
+          .listModels(url, key, { query, visionCatalog, headers })
           .catch((): ModelListResult => ({ error: '获取模型列表失败' }))
         cache.set(cacheKey, request)
       }
@@ -67,7 +67,7 @@ export function usePlatformModels(baseURL: string, apiKey: string) {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [cacheKey, canFetch, url, key, query, visionCatalog, attempt])
+  }, [cacheKey, canFetch, url, key, headers, query, visionCatalog, attempt])
 
   const reload = useCallback(() => {
     cache.delete(cacheKey)

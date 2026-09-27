@@ -52,6 +52,8 @@ API 地址和 API Key 需要从支持 OpenAI API 的代理服务商处获取。�
 
 当然，如果你（人在海外）可以直接使用 OpenAI 官方的 API 更好，只需要配置 `API Key` 就够了。
 
+如果你用的平台或网关除了 API Key 还要求额外的请求头（如 Azure 的 `api-key`、Cloudflare AI Gateway 的 `cf-aig-authorization`），可以在「自定义请求头」里每行填一个 `名称: 值`，每个 AI 配置分别保存。
+
 > 也可以在项目根目录创建 `.env` 文件预配置，程序启动后会自动读取作为默认值。
 
 ```env

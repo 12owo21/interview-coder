@@ -62,6 +62,8 @@ export const settings = {
   theme: 'dark' as 'dark' | 'light',
   apiBaseURL: process.env.API_BASE_URL || '',
   apiKey: process.env.API_KEY || '',
+  /** Extra request headers, one `Name: Value` per line; see shared/request-headers.ts */
+  apiHeaders: '',
   model: process.env.MODEL || '',
   customPrompt: '',
   /** Kept in sync with the renderer so the overlay toolbar can match the main window */

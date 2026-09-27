@@ -43,6 +43,7 @@ import type { Theme } from '@/lib/theme'
 import { isMac } from '@/lib/utils/env'
 import { useAppStore } from '@/lib/store/app'
 import { ModelField } from './ModelField'
+import { ApiHeadersField } from './ApiHeadersField'
 import { ApiProfiles } from './ApiProfiles'
 import { SelectBaseURL } from './SelectBaseURL'
 import { changeApiBaseURL } from '@/lib/model-switch'
@@ -213,6 +214,8 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </div>
+
+            <ApiHeadersField />
 
             <ModelField />
           </div>

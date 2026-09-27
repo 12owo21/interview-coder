@@ -79,7 +79,7 @@ function patchProfile(
 }
 
 /** The live fields that are a mirror of the active profile */
-const CREDENTIAL_KEYS = ['apiBaseURL', 'apiKey', 'model'] as const
+const CREDENTIAL_KEYS = ['apiBaseURL', 'apiKey', 'apiHeaders', 'model'] as const
 
 /** Same as `patchProfile`, but a no-op when `id` matches nothing */
 function patchActiveProfile(
@@ -111,6 +111,8 @@ interface Settings {
   /** API Base URL entries the user created from the picker, kept as a shortcut list */
   customBaseURLs: string[]
   apiKey: string
+  /** Extra request headers, one `Name: Value` per line */
+  apiHeaders: string
   model: string
   /** Custom models created before they were kept per API Base URL; offered for every URL */
   customModels: string[]
@@ -190,7 +192,9 @@ interface SettingsStore extends Settings {
    * than `updateSetting`, otherwise the edit lives only in the flat fields and
    * is lost the moment the user switches profiles or restarts.
    */
-  updateCredential: (patch: Partial<Pick<ApiProfile, 'apiBaseURL' | 'apiKey' | 'model'>>) => void
+  updateCredential: (
+    patch: Partial<Pick<ApiProfile, 'apiBaseURL' | 'apiKey' | 'apiHeaders' | 'model'>>
+  ) => void
   addCustomModel: (baseURL: string, model: string) => void
   removeCustomModel: (baseURL: string, model: string) => void
   /** Step the window opacity within [OPACITY_MIN, OPACITY_MAX] */
@@ -211,6 +215,7 @@ const defaultSettings: Settings = {
   apiBaseURL: '',
   customBaseURLs: [],
   apiKey: '',
+  apiHeaders: '',
   model: '',
   customModels: [],
   customModelsByBaseURL: {},
@@ -309,6 +314,7 @@ export const useSettingsStore = create<SettingsStore>()(
             activeProfileId: id,
             apiBaseURL: profile.apiBaseURL,
             apiKey: profile.apiKey,
+            apiHeaders: profile.apiHeaders,
             model: profile.model
           }
         })
@@ -322,6 +328,7 @@ export const useSettingsStore = create<SettingsStore>()(
           name,
           apiBaseURL: source?.apiBaseURL ?? '',
           apiKey: source?.apiKey ?? '',
+          apiHeaders: source?.apiHeaders ?? '',
           model: source?.model ?? ''
         })
         set({
@@ -329,6 +336,7 @@ export const useSettingsStore = create<SettingsStore>()(
           activeProfileId: profile.id,
           apiBaseURL: profile.apiBaseURL,
           apiKey: profile.apiKey,
+          apiHeaders: profile.apiHeaders,
           model: profile.model
         })
         return profile.id
@@ -353,6 +361,7 @@ export const useSettingsStore = create<SettingsStore>()(
             hasConfiguredApi: configured,
             ...(patch.apiBaseURL !== undefined ? { apiBaseURL: patch.apiBaseURL } : {}),
             ...(patch.apiKey !== undefined ? { apiKey: patch.apiKey } : {}),
+            ...(patch.apiHeaders !== undefined ? { apiHeaders: patch.apiHeaders } : {}),
             ...(patch.model !== undefined ? { model: patch.model } : {})
           }
         })
@@ -375,6 +384,7 @@ export const useSettingsStore = create<SettingsStore>()(
           activeProfileId: next.id,
           apiBaseURL: next.apiBaseURL,
           apiKey: next.apiKey,
+          apiHeaders: next.apiHeaders,
           model: next.model
         })
         return true
@@ -546,7 +556,11 @@ export const useSettingsStore = create<SettingsStore>()(
  * an ordinary load (trust the stored list).
  */
 function reconcileApiProfiles(state: Settings): ApiProfile[] {
-  const profiles = Array.isArray(state.apiProfiles) ? state.apiProfiles : []
+  // Profiles saved before custom headers existed carry none
+  const profiles = (Array.isArray(state.apiProfiles) ? state.apiProfiles : []).map((p) => ({
+    ...p,
+    apiHeaders: p.apiHeaders ?? ''
+  }))
   const active = profiles.find((p) => p.id === state.activeProfileId)
 
   if (profiles.length === 0) {
@@ -555,6 +569,7 @@ function reconcileApiProfiles(state: Settings): ApiProfile[] {
       name: '配置1',
       apiBaseURL: state.apiBaseURL ?? '',
       apiKey: state.apiKey ?? '',
+      apiHeaders: state.apiHeaders ?? '',
       model: state.model ?? ''
     }
     state.activeProfileId = seeded.id
@@ -569,6 +584,7 @@ function reconcileApiProfiles(state: Settings): ApiProfile[] {
     state.activeProfileId = first.id
     state.apiBaseURL = first.apiBaseURL
     state.apiKey = first.apiKey
+    state.apiHeaders = first.apiHeaders
     state.model = first.model
     state.hasConfiguredApi = hasAnyApiKey(profiles)
     return profiles
@@ -589,6 +605,8 @@ function reconcileApiProfiles(state: Settings): ApiProfile[] {
   state.apiBaseURL = resolved.apiBaseURL
   state.apiKey = resolved.apiKey
   state.model = resolved.model
+  // Headers came in with profiles, so no flat value predates them to adopt
+  state.apiHeaders = active.apiHeaders
 
   // A profile saved before these fields existed adopts whatever the flat
   // fields held, so an upgrade never silently blanks the user's credentials

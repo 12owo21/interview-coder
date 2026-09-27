@@ -6,8 +6,8 @@ import { SelectModel } from './SelectModel'
 
 /** The Model setting: a picker that follows the API Base URL, plus a warning when they don't match */
 export function ModelField() {
-  const { apiBaseURL, apiKey, model, setModel } = useSettingsStore()
-  const platformModels = usePlatformModels(apiBaseURL, apiKey)
+  const { apiBaseURL, apiKey, apiHeaders, model, setModel } = useSettingsStore()
+  const platformModels = usePlatformModels(apiBaseURL, apiKey, apiHeaders)
   const provider = findProvider(apiBaseURL)
   const diagnosis = diagnoseModel(
     model,
