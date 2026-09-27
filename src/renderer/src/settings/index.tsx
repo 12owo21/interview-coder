@@ -44,7 +44,7 @@ import { isMac } from '@/lib/utils/env'
 import { useAppStore } from '@/lib/store/app'
 import { ModelField } from './ModelField'
 import { ApiHeadersField } from './ApiHeadersField'
-import { ApiProfiles } from './ApiProfiles'
+import { ApiProfiles, ApiSaveStatus } from './ApiProfiles'
 import { CaptureTargetFields } from './CaptureTargetFields'
 import { SelectBaseURL } from './SelectBaseURL'
 import { changeApiBaseURL } from '@/lib/model-switch'
@@ -180,11 +180,10 @@ export default function SettingsPage() {
           <h2 className="text-lg font-semibold mb-4 flex items-center">
             <Bot className="h-5 w-5 mr-2" />
             AI 设置
+            <ApiSaveStatus />
           </h2>
 
-          <div className="space-y-4">
-            <ApiProfiles />
-
+          <ApiProfiles>
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">
                 API Base URL
@@ -219,7 +218,7 @@ export default function SettingsPage() {
             <ApiHeadersField />
 
             <ModelField />
-          </div>
+          </ApiProfiles>
         </div>
         {/* Transcription Settings */}
         <div className="bg-gray-300/80 rounded-lg p-6">
