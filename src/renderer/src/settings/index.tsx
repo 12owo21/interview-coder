@@ -9,7 +9,7 @@ import {
   Eye,
   EyeOff,
   Keyboard,
-  FolderOpen,
+  Camera,
   FileCode,
   Mic,
   Plus,
@@ -45,6 +45,7 @@ import { useAppStore } from '@/lib/store/app'
 import { ModelField } from './ModelField'
 import { ApiHeadersField } from './ApiHeadersField'
 import { ApiProfiles } from './ApiProfiles'
+import { CaptureTargetFields } from './CaptureTargetFields'
 import { SelectBaseURL } from './SelectBaseURL'
 import { changeApiBaseURL } from '@/lib/model-switch'
 import { CustomShortcuts, ResetDefaultShortcuts } from './CustomShortcuts'
@@ -630,14 +631,16 @@ export default function SettingsPage() {
           <CustomShortcuts />
         </div>
 
-        {/* Screenshot Save Settings */}
+        {/* Screenshot Settings */}
         <div className="bg-gray-300/80 rounded-lg p-6">
           <h2 className="text-lg font-semibold mb-4 flex items-center">
-            <FolderOpen className="h-5 w-5 mr-2" />
-            保存截图
+            <Camera className="h-5 w-5 mr-2" />
+            截图设置
           </h2>
 
           <div className="space-y-4">
+            <CaptureTargetFields />
+
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">
                 保存截图到本地

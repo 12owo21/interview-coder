@@ -1,4 +1,5 @@
 import { app, dialog, ipcMain } from 'electron'
+import type { CaptureRegion } from '../shared/capture-region'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
 
 ipcMain.handle('getAppVersion', () => {
@@ -74,6 +75,10 @@ export const settings = {
    * renderer fields from here, so a truthy default would overwrite a user's "off".
    */
   toolbarHoverDelay: 0,
+  /** Screen to capture: `cursor` follows the mouse, anything else is a fixed `Display.id` */
+  captureScreen: 'cursor',
+  /** Crop every screenshot to this area of one screen; null captures the whole screen */
+  captureRegion: null as CaptureRegion | null,
   screenshotAutoSave: false,
   screenshotDir: '',
   /** Save the code block of a finished answer as a source file */

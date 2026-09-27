@@ -3,6 +3,9 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type { AppSettings } from '../main/settings'
 import type { AppState } from '../main/state'
 import type { ListModelsOptions, ModelListResult } from '../main/model-list'
+import type { DisplayOption } from '../main/take-screenshot'
+import type { RegionPickerData } from '../main/region-picker'
+import type { CaptureRegion, RegionRect } from '../shared/capture-region'
 
 // Custom APIs for renderer
 const api = {
@@ -207,6 +210,15 @@ const api = {
     ipcRenderer.removeAllListeners('solution-clear')
   },
 
+  // Connected screens, for picking which one to capture
+  getDisplays: () => ipcRenderer.invoke('getDisplays') as Promise<DisplayOption[]>,
+  // Cover every screen and let the user drag out the capture region; null if cancelled
+  pickCaptureRegion: () => ipcRenderer.invoke('pickCaptureRegion') as Promise<CaptureRegion | null>,
+  // Inside a picker window: its frozen screen, then report it painted, then the result
+  getRegionPickerData: () =>
+    ipcRenderer.invoke('getRegionPickerData') as Promise<RegionPickerData | null>,
+  regionPickerReady: () => ipcRenderer.send('region-picker-ready'),
+  finishRegionPicker: (rect: RegionRect | null) => ipcRenderer.send('finish-region-picker', rect),
   // Select screenshot save directory
   selectScreenshotDir: () => ipcRenderer.invoke('selectScreenshotDir') as Promise<string | null>,
   // Select the directory the generated code is written to

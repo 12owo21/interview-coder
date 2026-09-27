@@ -39,7 +39,8 @@ src/
 │   ├── model-list.ts        # `listModels` IPC: a platform's `/models` list (+ SiliconFlow vision flags scraped from its public model square)
 │   ├── settings.ts          # App settings object + IPC handlers
 │   ├── state.ts             # App state object + IPC handlers
-│   ├── take-screenshot.ts   # desktopCapturer → base64 PNG
+│   ├── take-screenshot.ts   # desktopCapturer → base64 PNG of the screen under the cursor or a fixed one, cropped to `captureRegion`; `getDisplays` IPC
+│   ├── region-picker.ts     # One full-screen window per screen to drag out the capture region
 │   ├── save-screenshot.ts   # Optional auto-save of each screenshot to a folder
 │   ├── save-code.ts         # First code block of a finished answer → clipboard and/or source file
 │   ├── transcription.ts     # DashScope WebSocket real-time speech-to-text
@@ -50,7 +51,8 @@ src/
 │   ├── index.ts             # contextBridge API: exposes window.api to renderer
 │   └── index.d.ts           # Type declarations for window.electron and window.api
 ├── shared/                  # Pure TS used by both main and renderer (no Electron / DOM / Node imports)
-│   └── request-headers.ts   # Parse the custom request headers text, merge it over the Bearer key
+│   ├── request-headers.ts   # Parse the custom request headers text, merge it over the Bearer key
+│   └── capture-region.ts    # CaptureRegion type + fractions → pixels, for main's crop and the picker's readout
 └── renderer/
     ├── index.html            # SPA entry
     └── src/
@@ -69,9 +71,11 @@ src/
         │   ├── ApiProfiles.tsx     # Saved AI profiles: switch, add, rename, remove
         │   ├── ModelField.tsx      # Model row: picker + mismatch warning with one-click fix
         │   ├── ApiHeadersField.tsx # Custom request headers textarea + ignored-line warning
+        │   ├── CaptureTargetFields.tsx # Which screen to capture (cursor / fixed) + the optional capture region
         │   ├── SelectModel.tsx     # Model combobox that follows the API Base URL
         │   ├── SelectBaseURL.tsx   # API Base URL combobox (presets from lib/providers.ts)
         │   └── CustomShortcuts.tsx # Shortcut key recorder
+        ├── region-picker/    # One screen of the capture-region picker (`#/region-picker`, rendered without App)
         ├── help/             # Help page
         │   ├── index.tsx     # Quick start guide, shortcuts, toolbar, FAQ
         │   ├── Shortcuts.tsx
@@ -143,7 +147,7 @@ src/
 ### Data Flow: Screenshot → Solution
 
 1. User presses global shortcut (e.g., `Alt+Enter` on macOS)
-2. `shortcuts.ts` callback triggers `takeScreenshot()` → `desktopCapturer` → base64 PNG
+2. `shortcuts.ts` callback triggers `takeScreenshot()` → `desktopCapturer` → base64 PNG. It captures the screen under the cursor, or the one fixed in `captureScreen` (a `Display.id`; a disconnected one falls back to the cursor), matching the source by `display_id` — `desktopCapturer` returns screens in no particular order. A `captureRegion` overrides the screen choice and crops the capture (see Capture Region)
 3. Main sends `screenshot-taken` and `ai-loading-start` to renderer
 4. Main calls `getSolutionStream(base64Image)` → Vercel AI SDK `streamText()`
 5. Stream chunks sent to renderer via `solution-chunk` IPC events
@@ -155,6 +159,9 @@ src/
 **Renderer → Main (invoke):**
 - `getAppSettings` / `updateAppSettings` — settings CRUD
 - `listModels` — fetch the model list of an OpenAI-compatible platform (runs in main to avoid CORS)
+- `getDisplays` — connected screens (numbered left to right) for the capture-screen picker
+- `pickCaptureRegion` — cover every screen with a region picker; resolves with the region, or null if cancelled
+- `getRegionPickerData` / `region-picker-ready` / `finish-region-picker` (the last two `send`) — a picker window fetches its frozen screen, asks to be shown once painted, and reports the result
 - `updateAppState` — sync `inCoderPage`, `inSettingsPage`
 - `setIgnoreMouse` — set click-through from the settings page switch
 - `initShortcuts` / `getShortcuts` / `updateShortcuts` — shortcut management
@@ -182,7 +189,7 @@ src/
 
 | Store | File | Persisted | Key State |
 |-------|------|-----------|-----------|
-| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiProfiles`, `activeProfileId`, `hasConfiguredApi`, `apiBaseURL`, `apiKey`, `apiHeaders`, `model` (mirror of the active profile), `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes), `activeSceneId`, `customPrompt` (derived from active scene), `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `hideShortcutHints`, `screenshotDisplay`, `screenshotAutoSave`, `screenshotDir`, `codeAutoSave`, `codeSaveDir`, `codeFileBaseName`, `codeNamingMode`, `codeCopyToClipboard`, `dashscopeApiKey` |
+| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiProfiles`, `activeProfileId`, `hasConfiguredApi`, `apiBaseURL`, `apiKey`, `apiHeaders`, `model` (mirror of the active profile), `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes), `activeSceneId`, `customPrompt` (derived from active scene), `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `hideShortcutHints`, `screenshotDisplay`, `captureScreen`, `captureRegion`, `screenshotAutoSave`, `screenshotDir`, `codeAutoSave`, `codeSaveDir`, `codeFileBaseName`, `codeNamingMode`, `codeCopyToClipboard`, `dashscopeApiKey` |
 | `useShortcutsStore` | `lib/store/shortcuts.ts` | Yes (v5) | `shortcuts` (action → key mapping with categories); `merge` adds new default actions on every load, so a new shortcut needs no `version` bump |
 | `useSolutionStore` | `lib/store/solution.ts` | No | `isLoading`, `solutionChunks`, `screenshotData`, `errorMessage`, `durationMs` |
 | `useTranscriptionStore` | `lib/store/transcription.ts` | No | `isTranscribing`, `transcriptionText`, `errorMessage` |
@@ -238,6 +245,15 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - Three streaming functions: `getSolutionStream` (first screenshot), `getFollowUpStream` (follow-up), `getGeneralStream` (multi-screenshot)
 - Conversation history (`conversationMessages`) is maintained in `shortcuts.ts` as `ModelMessage[]`
 - When an answer finishes naturally (not stopped, not failed), `handleGeneratedCode()` in `save-code.ts` copies its first code block to the clipboard and/or saves it as `<base><n>.<ext>` (extension from the fence language); both are opt-in and silent
+
+### Capture Region
+
+`captureRegion` crops every screenshot to one area of one screen, stored as fractions of that screen (`src/shared/capture-region.ts`) so a resolution or scaling change does not shift it:
+- `pickCaptureRegion` soft-hides the main window, then `region-picker.ts` opens one window per screen at `screen-saver` level above the main window and toolbar, each showing a frozen capture of its screen (content protection keeps the app out of it)
+- The picker route is rendered straight from `main.tsx`, skipping `App`: a throwaway window must not sync settings or re-register shortcuts
+- The pickers cover every screen, so any exit — Enter / Esc, closing one, a crashed or unresponsive renderer, a 5-minute timeout — closes them all and restores the main window
+- The dimming around the selection is four plain panels: a `clip-path` hole or a huge `box-shadow` did not paint over the full-screen image
+- A region whose screen is disconnected is kept but ignored until it comes back, so the whole screen is captured meanwhile
 
 ### Stream Abort Pattern
 

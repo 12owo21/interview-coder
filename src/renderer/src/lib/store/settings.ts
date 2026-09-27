@@ -7,6 +7,7 @@ import generalQaPrompt from './prompts/general-qa.md?raw'
 import { DEFAULT_THEME, type Theme } from '../theme'
 import { normalizeBaseURL, resolveLinkedModel, type ModelSwitchReason } from '../providers'
 import { createProfile, type ApiProfile } from '../api-profiles'
+import type { CaptureRegion } from '../../../../shared/capture-region'
 
 export type { Theme }
 export type { ApiProfile }
@@ -62,6 +63,9 @@ function composeCustomPrompt(scenes: PromptScene[], activeSceneId: string): stri
   // An emptied preset scene falls back to its default prompt
   return scene.prompt.trim() || PRESET_SCENE_PROMPTS[scene.id] || ''
 }
+
+/** `captureScreen` value for capturing whichever screen the mouse is on */
+export const CAPTURE_SCREEN_CURSOR = 'cursor'
 
 /** How captured screenshots are shown on the main page, ordered by how much room they take */
 export type ScreenshotDisplay = 'none' | 'count' | 'gallery'
@@ -136,6 +140,10 @@ interface Settings {
   toolbarHoverDelay: number
   /** How the captured screenshots are shown above the solution */
   screenshotDisplay: ScreenshotDisplay
+  /** 截取哪块屏幕：`cursor` 跟随鼠标，其余为固定屏幕的 `Display.id` */
+  captureScreen: string
+  /** 只截取某块屏幕上的这块区域；为 null 时截取整个屏幕 */
+  captureRegion: CaptureRegion | null
 
   screenshotAutoSave: boolean
   screenshotDir: string
@@ -230,6 +238,8 @@ const defaultSettings: Settings = {
   hideShortcutHints: false,
   toolbarHoverDelay: 1000,
   screenshotDisplay: 'gallery',
+  captureScreen: CAPTURE_SCREEN_CURSOR,
+  captureRegion: null,
 
   screenshotAutoSave: false,
   screenshotDir: '',

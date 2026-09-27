@@ -10,6 +10,7 @@ import {
   sendToToolbar
 } from './toolbar-window'
 import { takeScreenshot } from './take-screenshot'
+import { pickCaptureRegion } from './region-picker'
 import { saveScreenshotToDisk } from './save-screenshot'
 import { handleGeneratedCode } from './save-code'
 import { getSolutionStream, getFollowUpStream, getGeneralStream } from './ai'
@@ -817,6 +818,19 @@ ipcMain.handle('setToolbarVisible', (_event, visible: boolean) => {
 ipcMain.handle('setIgnoreMouse', (_event, ignore: boolean) => {
   setIgnoreMouse(ignore)
   return state.ignoreMouse
+})
+
+ipcMain.handle('pickCaptureRegion', async () => {
+  const mainWindow = global.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed()) return null
+  // Out of the way while the user drags: it would cover part of the screen, and
+  // the top-most guard would keep lifting it back above the picker
+  softHideWindow(mainWindow)
+  try {
+    return await pickCaptureRegion(settings.captureRegion)
+  } finally {
+    restoreSoftHiddenWindow(mainWindow)
+  }
 })
 
 ipcMain.handle('sendFollowUpQuestion', async (_event, question: string) => {
