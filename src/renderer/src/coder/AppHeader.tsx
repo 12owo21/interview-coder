@@ -12,6 +12,11 @@ export function AppHeader() {
   const navigate = useNavigate()
   const { ignoreMouse } = useAppStore()
   const model = useSettingsStore((state) => state.model)
+  // A shortcut or a toolbar hover can switch it unnoticed, so it stays in view
+  const sceneName = useSettingsStore(
+    (state) => state.scenes.find((s) => s.id === state.activeSceneId)?.name
+  )
+  const context = [sceneName, model].filter(Boolean).join(' · ')
   const elapsed = useElapsed()
   const setDurationMs = useSolutionStore((state) => state.setDurationMs)
   const [appVersion, setAppVersion] = useState('')
@@ -34,9 +39,9 @@ export function AppHeader() {
         Flex shrink decides what survives a narrow window. The higher the
         factor, the sooner that item is squeezed, and it disappears once it
         reaches `min-width: 0`:
-          title  flex: 1 8 auto  compressed first, being the least informative
-          model  flex: 0 4 auto  next; still reachable from the settings page
-          timer  shrink-0        never compressed — it exists nowhere else
+          title    flex: 1 8 auto  compressed first, being the least informative
+          context  flex: 0 4 auto  next (scene · model); still in the settings page
+          timer    shrink-0        never compressed — it exists nowhere else
       */}
       {elapsed !== null && (
         <span className="shrink-0 whitespace-nowrap pl-2 text-xs tabular-nums opacity-70 pointer-events-none">
@@ -50,12 +55,12 @@ export function AppHeader() {
         <span className="truncate">截屏解题助手</span>
         {appVersion && <span className="shrink-0 text-[10px] opacity-60">v{appVersion}</span>}
       </div>
-      {model && (
+      {context && (
         <span
           className="min-w-0 truncate pr-2 text-[10px] opacity-60 pointer-events-none"
           style={{ flex: '0 4 auto', minWidth: 0 }}
         >
-          {model}
+          {context}
         </span>
       )}
       <div className={`actions ${ignoreMouse ? 'pointer-events-none' : ''}`}>

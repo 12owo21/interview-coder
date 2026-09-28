@@ -65,6 +65,7 @@ const api = {
       | 'toggleTranscription'
       | 'clearTranscription'
       | 'pickCaptureRegion'
+      | 'cycleScene'
   ) => ipcRenderer.invoke('triggerAction', action),
   setToolbarVisible: (visible: boolean) => ipcRenderer.invoke('setToolbarVisible', visible),
   // Set click-through from the settings page; returns the state main ended up in
@@ -99,6 +100,14 @@ const api = {
   },
   removeSwitchApiProfileListener: () => {
     ipcRenderer.removeAllListeners('switch-api-profile')
+  },
+
+  // Shortcut or toolbar asked to step to the next prompt scene
+  onCycleScene: (callback: () => void) => {
+    ipcRenderer.on('cycle-scene', () => callback())
+  },
+  removeCycleSceneListener: () => {
+    ipcRenderer.removeAllListeners('cycle-scene')
   },
 
   // The active model refused 「关闭思考」, so its requests now go without it

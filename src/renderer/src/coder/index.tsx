@@ -53,6 +53,18 @@ export default function CoderPage() {
     }
   }, [])
 
+  useEffect(() => {
+    window.api.onCycleScene(() => {
+      const name = useSettingsStore.getState().cycleScene()
+      if (!name) return
+      // An answer already streaming keeps the prompt it started with
+      toast(`已切换到「${name}」`, { description: '下次提问生效', duration: 3000 })
+    })
+    return () => {
+      window.api.removeCycleSceneListener()
+    }
+  }, [])
+
   // Main already resent the request without the switch; this only explains why
   // the answer may be slower than the setting promises
   useEffect(() => {

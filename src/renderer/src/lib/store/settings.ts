@@ -209,6 +209,8 @@ interface SettingsStore extends Settings {
   adjustOpacity: (delta: number) => void
   syncSettings: (settings: Partial<Settings>) => void
   setActiveScene: (id: string) => void
+  /** Step to the next scene, wrapping at the end, and report its name */
+  cycleScene: () => string
   updateScenePrompt: (id: string, prompt: string) => void
   addScene: (name: string) => string
   removeScene: (id: string) => void
@@ -477,6 +479,14 @@ export const useSettingsStore = create<SettingsStore>()(
           activeSceneId: id,
           customPrompt: composeCustomPrompt(state.scenes, id)
         }))
+      },
+      cycleScene: () => {
+        const { scenes, activeSceneId } = get()
+        if (scenes.length === 0) return ''
+        // An unknown active id starts over from the first scene
+        const next = scenes[(scenes.findIndex((s) => s.id === activeSceneId) + 1) % scenes.length]
+        get().setActiveScene(next.id)
+        return next.name
       },
       updateScenePrompt: (id, prompt) => {
         set((state) => {

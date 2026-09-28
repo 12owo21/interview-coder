@@ -86,6 +86,11 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
     key: `${platformAlt}+]`,
     category: 'Screenshot & AI'
   },
+  cycleScene: {
+    action: 'cycleScene',
+    key: `${platformAlt}+Shift+P`,
+    category: 'Screenshot & AI'
+  },
   toggleTranscription: {
     action: 'toggleTranscription',
     key: `${platformAlt}+T`,

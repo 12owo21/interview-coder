@@ -112,6 +112,11 @@ export function CustomShortcuts() {
             shortcut="nextApiProfile"
           />
           <Shortcut
+            label="切换提示词场景"
+            description="依次切到下一个场景，最后一个之后回到第一个；从下次提问开始生效，不清空当前对话"
+            shortcut="cycleScene"
+          />
+          <Shortcut
             label="语音转录"
             description="开始/暂停实时语音转录"
             shortcut="toggleTranscription"

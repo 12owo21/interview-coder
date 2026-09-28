@@ -65,6 +65,7 @@ const getShortcutDescription = (action: string) => {
     stopSolutionStream: '停止生成',
     previousApiProfile: '切换到上一个 AI 配置',
     nextApiProfile: '切换到下一个 AI 配置',
+    cycleScene: '切换到下一个提示词场景',
     toggleTranscription: '开始/暂停实时语音转录',
     clearTranscription: '清除转录文本（不提交给AI）',
     pageUp: '向上翻页',

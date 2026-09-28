@@ -9,6 +9,7 @@ import {
   CircleStop,
   Crop,
   ImagePlus,
+  Layers,
   Mic,
   MousePointer2,
   Sun,
@@ -46,5 +47,6 @@ export const TOOLBAR_ACTIONS: ToolbarAction[] = [
   { action: 'moveMainWindowRight', Icon: ArrowRight, label: '向右移动窗口' },
   { action: 'increaseOpacity', Icon: Sun, label: '提高不透明度（更清晰）' },
   { action: 'decreaseOpacity', Icon: SunDim, label: '提高透明度（更透明）' },
-  { action: 'toggleTranscription', Icon: Mic, label: '开始/暂停语音转录' }
+  { action: 'toggleTranscription', Icon: Mic, label: '开始/暂停语音转录' },
+  { action: 'cycleScene', Icon: Layers, label: '切换到下一个提示词场景' }
 ]

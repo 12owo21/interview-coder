@@ -663,6 +663,18 @@ const callbacks: Record<string, () => void> = {
     mainWindow.webContents.send('switch-api-profile', -1)
   },
 
+  /**
+   * The scenes live in the renderer store, so main only asks it to step; the
+   * new prompt comes back as `customPrompt` and is read at the next request.
+   * The conversation is kept: a new screenshot starts a new one anyway, and a
+   * follow-up after switching needs the question it follows up on.
+   */
+  cycleScene: () => {
+    const mainWindow = global.mainWindow
+    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    mainWindow.webContents.send('cycle-scene')
+  },
+
   ignoreOrEnableMouse: () => {
     setIgnoreMouse(!state.ignoreMouse)
   },
@@ -749,7 +761,8 @@ const clickableActions = new Set([
   'moveMainWindowRight',
   'toggleTranscription',
   'clearTranscription',
-  'pickCaptureRegion'
+  'pickCaptureRegion',
+  'cycleScene'
 ])
 
 function unregisterShortcut(action: string) {
