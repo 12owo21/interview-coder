@@ -84,7 +84,7 @@ src/
         │   ├── FAQ.tsx
         │   └── components/index.tsx  # HelpSection wrapper
         ├── components/
-        │   ├── MarkdownRenderer.tsx   # react-markdown + remark-gfm + rehype-highlight
+        │   ├── MarkdownRenderer.tsx   # react-markdown + remark-gfm + rehype-highlight + KaTeX math
         │   ├── ShortcutRenderer.tsx   # Platform-aware shortcut key badges
         │   ├── WindowResizeHandles.tsx # Edge/corner drag targets that drive window-resize.ts
         │   └── ui/           # shadcn/ui primitives (button, dialog, select, etc.)

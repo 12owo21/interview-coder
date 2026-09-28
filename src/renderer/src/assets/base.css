@@ -114,6 +114,12 @@
   border: 1px solid oklch(0.9 0 0);
 }
 
+/* A formula wider than the window scrolls instead of stretching the page */
+.prose .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
