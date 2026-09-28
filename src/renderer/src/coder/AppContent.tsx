@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Images } from 'lucide-react'
 import { useSettingsStore, type ScreenshotDisplay } from '@/lib/store/settings'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
@@ -22,6 +22,32 @@ export function AppContent() {
 
   const screenshotDisplay = useSettingsStore((state) => state.screenshotDisplay)
 
+  // Each chunk arrives as its own IPC message, and writing it straight to the
+  // store re-renders and re-parses the whole markdown answer once per chunk. A
+  // fast model outruns that as the answer grows, and the text lags further and
+  // further behind the stream. Buffering until the next animation frame caps the
+  // work at one parse per frame, however fast the chunks come.
+  const pendingChunks = useRef<string[]>([])
+  const frameHandle = useRef<number | null>(null)
+
+  const flushChunks = useCallback(() => {
+    if (frameHandle.current !== null) {
+      window.cancelAnimationFrame(frameHandle.current)
+      frameHandle.current = null
+    }
+    if (pendingChunks.current.length === 0) return
+    addSolutionChunk(pendingChunks.current.join(''))
+    pendingChunks.current = []
+  }, [addSolutionChunk])
+
+  const discardPendingChunks = useCallback(() => {
+    if (frameHandle.current !== null) {
+      window.cancelAnimationFrame(frameHandle.current)
+      frameHandle.current = null
+    }
+    pendingChunks.current = []
+  }, [])
+
   const [recentScreenshots, setRecentScreenshots] = useState<string[]>([])
   // Main keeps only the last 5 thumbnails, but every screenshot went to the AI
   const [screenshotTotal, setScreenshotTotal] = useState(0)
@@ -40,6 +66,8 @@ export function AppContent() {
 
     // New session clear (pictures + answers)
     window.api.onSolutionClear(() => {
+      // Chunks still buffered belong to the answer being cleared
+      discardPendingChunks()
       clearSolution()
       setRecentScreenshots([])
       setScreenshotTotal(0)
@@ -47,9 +75,12 @@ export function AppContent() {
       setErrorMessage(null)
     })
 
-    // Listen for solution chunks
+    // Listen for solution chunks, buffered until the next frame (see pendingChunks)
     window.api.onSolutionChunk((chunk: string) => {
-      addSolutionChunk(chunk)
+      pendingChunks.current.push(chunk)
+      if (frameHandle.current === null) {
+        frameHandle.current = window.requestAnimationFrame(flushChunks)
+      }
     })
 
     // AI loading
@@ -63,6 +94,7 @@ export function AppContent() {
 
     // Cleanup listeners on unmount
     return () => {
+      discardPendingChunks()
       window.api.removeScreenshotListener()
       window.api.removeScreenshotsUpdatedListener()
       window.api.removeSolutionChunkListener()
@@ -70,16 +102,29 @@ export function AppContent() {
       window.api.removeAiLoadingEndListener()
       window.api.removeSolutionClearListener()
     }
-  }, [setScreenshotData, clearSolution, setIsLoading, addSolutionChunk, setErrorMessage])
+  }, [
+    setScreenshotData,
+    clearSolution,
+    setIsLoading,
+    flushChunks,
+    discardPendingChunks,
+    setErrorMessage
+  ])
 
   useEffect(() => {
+    // Flush at once when the stream ends rather than waiting for a frame: a
+    // hidden window may not paint one for a while, and the answer must be
+    // complete in the store the moment it is reported finished
     window.api.onSolutionComplete(() => {
+      flushChunks()
       setIsLoading(false)
     })
     window.api.onSolutionStopped(() => {
+      flushChunks()
       setIsLoading(false)
     })
     window.api.onSolutionError((message: string) => {
+      flushChunks()
       setIsLoading(false)
       setErrorMessage(message)
     })
@@ -88,7 +133,7 @@ export function AppContent() {
       window.api.removeSolutionStoppedListener()
       window.api.removeSolutionErrorListener()
     }
-  }, [setIsLoading, setErrorMessage])
+  }, [flushChunks, setIsLoading, setErrorMessage])
 
   useEffect(() => {
     window.api.onScrollPageUp(() => {
@@ -122,6 +167,10 @@ export function AppContent() {
   // covers a render that lands between the two
   const screenshots =
     recentScreenshots.length > 0 ? recentScreenshots : screenshotData ? [screenshotData] : []
+
+  // Stable between chunks, so the memoized renderer skips the renders caused by
+  // the rest of the solution store (loading flag, timing, errors)
+  const solutionText = useMemo(() => solutionChunks.join(''), [solutionChunks])
 
   return (
     <div id="app-content" className="px-6 py-4">
@@ -174,7 +223,7 @@ export function AppContent() {
       )}
 
       {/* Solution Display */}
-      <MarkdownRenderer>{solutionChunks.join('')}</MarkdownRenderer>
+      <MarkdownRenderer>{solutionText}</MarkdownRenderer>
     </div>
   )
 }
