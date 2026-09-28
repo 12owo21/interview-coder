@@ -44,12 +44,26 @@ export default function CoderPage() {
         return
       }
       toast(`已切换到「${profile.name}」`, {
-        description: profile.model || '未设置模型',
+        description: `${profile.model || '未设置模型'}${profile.disableThinking ? ' · 关闭思考' : ''}`,
         duration: 3000
       })
     })
     return () => {
       window.api.removeSwitchApiProfileListener()
+    }
+  }, [])
+
+  // Main already resent the request without the switch; this only explains why
+  // the answer may be slower than the setting promises
+  useEffect(() => {
+    window.api.onThinkingUnsupported((model) => {
+      toast('当前模型不支持关闭思考，已按默认方式请求', {
+        description: `${model}：可在设置里关掉这个配置的「关闭思考」`,
+        duration: 5000
+      })
+    })
+    return () => {
+      window.api.removeThinkingUnsupportedListener()
     }
   }, [])
 

@@ -20,7 +20,7 @@ const UNNAMED = '未命名配置'
 /**
  * The saved AI endpoints as a row of chips, the same pattern as 使用场景: click
  * one to make it active, and the panel below (`children`: URL, key, headers,
- * model) edits that one. Each entry holds its own set, so switching does not
+ * model, thinking switch) edits that one. Each entry holds its own set, so switching does not
  * disturb the others.
  */
 export function ApiProfiles({ children }: { children: ReactNode }) {
@@ -91,7 +91,7 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
           <DialogHeader>
             <DialogTitle>新增配置</DialogTitle>
             <DialogDescription>
-              每个配置单独保存 API 地址、密钥、请求头和模型，之后可点选或用快捷键切换
+              每个配置单独保存 API 地址、密钥、请求头、模型和思考开关，之后可点选或用快捷键切换
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -203,7 +203,8 @@ function SaveStatus() {
     profile?.apiBaseURL,
     profile?.apiKey,
     profile?.apiHeaders,
-    profile?.model
+    profile?.model,
+    profile?.disableThinking
   ])
   const lastSnapshot = useRef(snapshot)
   const [state, setState] = useState<'idle' | 'saving' | 'saved'>('idle')

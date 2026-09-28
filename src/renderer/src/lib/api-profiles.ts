@@ -14,6 +14,12 @@ export interface ApiProfile {
   /** Extra request headers some platforms need, one `Name: Value` per line */
   apiHeaders: string
   model: string
+  /**
+   * Ask the model to skip its thinking phase (see main thinking.ts). Kept per
+   * profile because whether it helps, and how it is spelled, depends on the
+   * platform and model — and so a fast profile and a careful one can sit side by side.
+   */
+  disableThinking: boolean
 }
 
 let profileSeq = 0
@@ -32,6 +38,7 @@ export function createProfile(partial?: Partial<ApiProfile>): ApiProfile {
     apiBaseURL: baseURL,
     apiKey: partial?.apiKey ?? '',
     apiHeaders: partial?.apiHeaders ?? '',
-    model: partial?.model ?? findProvider(baseURL)?.defaultModel ?? ''
+    model: partial?.model ?? findProvider(baseURL)?.defaultModel ?? '',
+    disableThinking: partial?.disableThinking ?? false
   }
 }

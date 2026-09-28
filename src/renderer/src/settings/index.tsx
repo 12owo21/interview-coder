@@ -68,6 +68,7 @@ export default function SettingsPage() {
     screenshotDisplay,
     apiBaseURL,
     apiKey,
+    disableThinking,
     scenes,
     activeSceneId,
     screenshotAutoSave,
@@ -218,6 +219,20 @@ export default function SettingsPage() {
             <ApiHeadersField />
 
             <ModelField />
+
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">
+                关闭思考
+                <span className="ml-2 text-xs font-light">
+                  跳过答题前看不见的思考过程，出字更快，难题可能不如开着准；模型不支持时自动忽略
+                </span>
+              </label>
+              <Switch
+                className="scale-y-90"
+                checked={disableThinking}
+                onCheckedChange={(checked) => updateCredential({ disableThinking: checked })}
+              />
+            </div>
           </ApiProfiles>
         </div>
         {/* Transcription Settings */}

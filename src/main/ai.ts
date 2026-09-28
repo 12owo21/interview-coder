@@ -2,6 +2,7 @@ import { streamText, type ModelMessage } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { settings, AppSettings } from './settings'
 import { buildRequestHeaders } from '../shared/request-headers'
+import { createThinkingOffFetch } from './thinking'
 
 // The system prompt is fully managed by the renderer (prompt scenes in the
 // settings store) and synced here via updateAppSettings on app startup
@@ -9,11 +10,22 @@ function getSystemPrompt(extra?: string) {
   return [settings.customPrompt, extra].filter(Boolean).join('\n\n') || undefined
 }
 
+/** Tell the user once that the active model ignores the profile's 「关闭思考」 */
+function reportThinkingRefused(model: string) {
+  const mainWindow = global.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('thinking-unsupported', model)
+}
+
 function createProvider() {
   return createOpenAI({
     baseURL: settings.apiBaseURL,
     apiKey: settings.apiKey,
-    headers: buildRequestHeaders(settings.apiKey, settings.apiHeaders)
+    headers: buildRequestHeaders(settings.apiKey, settings.apiHeaders),
+    // Only when asked for: a plain request is the one every platform accepts
+    ...(settings.disableThinking
+      ? { fetch: createThinkingOffFetch(settings.apiBaseURL, reportThinkingRefused) }
+      : {})
   })
 }
 

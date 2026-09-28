@@ -66,6 +66,12 @@ export const settings = {
   /** Extra request headers, one `Name: Value` per line; see shared/request-headers.ts */
   apiHeaders: '',
   model: process.env.MODEL || '',
+  /**
+   * The active profile's 「关闭思考」, see thinking.ts. Must stay falsy here:
+   * App.tsx fills blank renderer fields from main, so `true` would overwrite a
+   * user's "off".
+   */
+  disableThinking: false,
   customPrompt: '',
   /** Kept in sync with the renderer so the overlay toolbar can match the main window */
   opacity: 0.8,

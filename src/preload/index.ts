@@ -101,6 +101,14 @@ const api = {
     ipcRenderer.removeAllListeners('switch-api-profile')
   },
 
+  // The active model refused 「关闭思考」, so its requests now go without it
+  onThinkingUnsupported: (callback: (model: string) => void) => {
+    ipcRenderer.on('thinking-unsupported', (_event, model: string) => callback(model))
+  },
+  removeThinkingUnsupportedListener: () => {
+    ipcRenderer.removeAllListeners('thinking-unsupported')
+  },
+
   // How long the finished request took, in milliseconds (measured in main)
   onSolutionDuration: (callback: (ms: number) => void) => {
     ipcRenderer.on('solution-duration', (_event, ms: number) => callback(ms))
