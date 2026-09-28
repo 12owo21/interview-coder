@@ -87,7 +87,9 @@ export default function SettingsPage() {
     setActiveScene,
     updateScenePrompt,
     addScene,
-    removeScene
+    removeScene,
+    removedPresetSceneIds,
+    restorePresetScenes
   } = useSettingsStore()
   const { ignoreMouse, syncAppState } = useAppStore()
   const [showApiKey, setShowApiKey] = useState(false)
@@ -348,7 +350,7 @@ export default function SettingsPage() {
               <label className="text-sm font-medium">
                 使用场景
                 <span className="ml-2 text-xs font-light">
-                  选择场景后可编辑对应的系统提示词，修改会自动保存；也可新增自己的场景
+                  选择场景后可编辑对应的系统提示词，修改会自动保存；可新增场景，用不到的也可以删掉，快捷键切换时只在剩下的场景间循环
                 </span>
               </label>
               <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -363,10 +365,11 @@ export default function SettingsPage() {
                     )}
                     onClick={() => setActiveScene(scene.id)}
                   >
-                    <span className={cn('py-1 pl-3', scene.isPreset ? 'pr-3' : 'pr-1')}>
+                    <span className={cn('py-1 pl-3', scenes.length > 1 ? 'pr-1' : 'pr-3')}>
                       {scene.name}
                     </span>
-                    {!scene.isPreset && (
+                    {/* The last scene stays: there must be a prompt to use */}
+                    {scenes.length > 1 && (
                       <button
                         className="mr-1.5 p-0.5 rounded-full opacity-60 hover:opacity-100 hover:bg-black/10"
                         title="删除该场景"
@@ -387,6 +390,15 @@ export default function SettingsPage() {
                   <Plus className="h-3.5 w-3.5" />
                   新增场景
                 </button>
+                {removedPresetSceneIds.length > 0 && (
+                  <button
+                    className="flex items-center gap-1 rounded-full border border-dashed border-gray-400 bg-transparent px-3 py-1 text-sm text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
+                    onClick={restorePresetScenes}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    恢复预设场景
+                  </button>
+                )}
               </div>
             </div>
 
@@ -454,7 +466,9 @@ export default function SettingsPage() {
             <DialogHeader>
               <DialogTitle>删除场景</DialogTitle>
               <DialogDescription>
-                确定删除场景「{deletingScene?.name}」吗？其提示词内容将一并删除，且无法恢复。
+                {deletingScene?.isPreset
+                  ? `确定删除预设场景「${deletingScene.name}」吗？之后可点「恢复预设场景」找回，提示词会恢复为默认内容。`
+                  : `确定删除场景「${deletingScene?.name}」吗？其提示词内容将一并删除，且无法恢复。`}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>

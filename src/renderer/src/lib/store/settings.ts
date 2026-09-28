@@ -56,6 +56,24 @@ const createPresetScenes = (): PromptScene[] => [
   }
 ]
 
+/**
+ * The scene list: the presets the user has not deleted, in their fixed order
+ * and keeping edited prompts, then the user's own. A preset added in a later
+ * version is not in `removed`, so it still reaches existing users.
+ */
+function assembleScenes(saved: PromptScene[], removed: string[]): PromptScene[] {
+  return [
+    ...createPresetScenes()
+      .filter((p) => !removed.includes(p.id))
+      .map((p) => {
+        const kept = saved.find((s) => s.id === p.id)
+        // An emptied (or restored) preset gets its default prompt back
+        return kept?.prompt.trim() ? kept : p
+      }),
+    ...saved.filter((s) => !s.isPreset)
+  ]
+}
+
 /** Derive the `customPrompt` (the system prompt used by the main process) from the active scene */
 function composeCustomPrompt(scenes: PromptScene[], activeSceneId: string): string {
   const scene = scenes.find((s) => s.id === activeSceneId)
@@ -130,6 +148,8 @@ interface Settings {
 
   scenes: PromptScene[]
   activeSceneId: string
+  /** Preset scenes the user deleted; kept so the next load does not bring them back */
+  removedPresetSceneIds: string[]
 
   opacity: number
   /** Allow resizing the main window and overlay toolbar */
@@ -213,7 +233,10 @@ interface SettingsStore extends Settings {
   cycleScene: () => string
   updateScenePrompt: (id: string, prompt: string) => void
   addScene: (name: string) => string
-  removeScene: (id: string) => void
+  /** Delete a scene, preset or not; refuses to delete the last one */
+  removeScene: (id: string) => boolean
+  /** Bring back every deleted preset scene, with its default prompt */
+  restorePresetScenes: () => void
 }
 
 const defaultSettings: Settings = {
@@ -234,6 +257,7 @@ const defaultSettings: Settings = {
   customPrompt: PRESET_SCENE_PROMPTS[CODING_SCENE_ID],
   scenes: createPresetScenes(),
   activeSceneId: CODING_SCENE_ID,
+  removedPresetSceneIds: [],
 
   opacity: 0.8,
   resizable: true,
@@ -510,15 +534,36 @@ export const useSettingsStore = create<SettingsStore>()(
         return id
       },
       removeScene: (id) => {
-        const scene = get().scenes.find((s) => s.id === id)
-        if (!scene || scene.isPreset) return
+        const state = get()
+        // One must remain, or there is nothing to pick and no prompt to edit
+        if (state.scenes.length <= 1) return false
+        const index = state.scenes.findIndex((s) => s.id === id)
+        if (index === -1) return false
+
+        const scenes = state.scenes.filter((s) => s.id !== id)
+        // Removing the active scene hands over to its neighbour
+        const activeSceneId =
+          state.activeSceneId === id
+            ? scenes[Math.min(index, scenes.length - 1)].id
+            : state.activeSceneId
+        set({
+          scenes,
+          activeSceneId,
+          customPrompt: composeCustomPrompt(scenes, activeSceneId),
+          // Presets are rebuilt on every load, so a deleted one must be remembered
+          ...(state.scenes[index].isPreset
+            ? { removedPresetSceneIds: [...state.removedPresetSceneIds, id] }
+            : {})
+        })
+        return true
+      },
+      restorePresetScenes: () => {
         set((state) => {
-          const scenes = state.scenes.filter((s) => s.id !== id)
-          const activeSceneId = state.activeSceneId === id ? CODING_SCENE_ID : state.activeSceneId
+          const scenes = assembleScenes(state.scenes, [])
           return {
             scenes,
-            activeSceneId,
-            customPrompt: composeCustomPrompt(scenes, activeSceneId)
+            removedPresetSceneIds: [],
+            customPrompt: composeCustomPrompt(scenes, state.activeSceneId)
           }
         })
       }
@@ -553,19 +598,21 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       merge: (persisted, current) => {
         const state = { ...current, ...(persisted as Partial<Settings>) }
-        // Ensure preset scenes always exist (keep user-edited prompts),
-        // so presets added in future versions show up for existing users
+        // Rebuild the presets on every load, so ones added in a later version
+        // show up for existing users; the ones the user deleted stay out
         const persistedScenes = Array.isArray(state.scenes) ? state.scenes : []
-        state.scenes = [
-          ...createPresetScenes().map((p) => {
-            const saved = persistedScenes.find((s) => s.id === p.id)
-            // Restore the default prompt if a preset scene was left empty
-            return saved?.prompt.trim() ? saved : p
-          }),
-          ...persistedScenes.filter((s) => !s.isPreset)
-        ]
+        state.removedPresetSceneIds = Array.isArray(state.removedPresetSceneIds)
+          ? state.removedPresetSceneIds
+          : []
+        state.scenes = assembleScenes(persistedScenes, state.removedPresetSceneIds)
+        // Deleting refuses the last scene, but a hand-edited store could still
+        // arrive empty; the presets are the only sensible thing to offer then
+        if (state.scenes.length === 0) {
+          state.removedPresetSceneIds = []
+          state.scenes = assembleScenes(persistedScenes, [])
+        }
         if (!state.scenes.some((s) => s.id === state.activeSceneId)) {
-          state.activeSceneId = CODING_SCENE_ID
+          state.activeSceneId = state.scenes[0].id
         }
         state.customPrompt = composeCustomPrompt(state.scenes, state.activeSceneId)
         state.apiProfiles = reconcileApiProfiles(state)
