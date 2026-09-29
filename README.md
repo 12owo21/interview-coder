@@ -4,6 +4,8 @@
 
 关键词：编码面试助手 / 语音面试助手 / 在线考试助手 / 笔试助手
 
+> **版本说明**：v3 起新增对话模式，此后只维护 v3（`main` 分支）。只有截图解题的 v2 版本保留在 [`v2` 分支](https://github.com/ooboqoo/interview-coder-cn/tree/v2)，不再更新，安装包见 [v2.1.0](https://github.com/ooboqoo/interview-coder-cn/releases/tag/v2.1.0)。
+
 ![截图模式演示](https://github.com/user-attachments/assets/19781594-3108-4711-a54b-9d36496787bc)
 
 <!-- TODO: 对话模式演示动图 -->
