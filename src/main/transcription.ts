@@ -11,6 +11,44 @@ let taskStarted = false
 let accumulatedText = ''
 let currentPartial = ''
 
+export type TranscriptionPurpose = 'screenshot' | 'conversation'
+
+export interface TranscriptionOptions {
+  /**
+   * 截图模式 collects the text for the next screenshot; 对话模式 hands every
+   * sentence to conversation.ts instead, leaving 截图模式's text untouched
+   */
+  purpose?: TranscriptionPurpose
+  /** Silence (ms) that ends a sentence; the recogniser's default (1300ms) when absent */
+  maxSentenceSilence?: number
+}
+
+let purpose: TranscriptionPurpose = 'screenshot'
+
+type SentenceListener = (text: string, final: boolean) => void
+const sentenceListeners = new Set<SentenceListener>()
+const endListeners = new Set<() => void>()
+
+/** 对话模式: every revision of the sentence being spoken, and its final text */
+export function onConversationSentence(listener: SentenceListener): void {
+  sentenceListeners.add(listener)
+}
+
+/** Recognition stopped, for whatever reason */
+export function onTranscriptionEnd(listener: () => void): void {
+  endListeners.add(listener)
+}
+
+export function isTranscriptionRunning(purposeWanted: TranscriptionPurpose): boolean {
+  return isTranscribing && purpose === purposeWanted
+}
+
+/** Tell the renderer and the listeners in main that recognition has stopped */
+function reportStopped() {
+  sendToRenderer('transcription-stopped')
+  endListeners.forEach((listener) => listener())
+}
+
 function sendToRenderer(channel: string, ...args: unknown[]) {
   const mainWindow = global.mainWindow
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -31,12 +69,14 @@ function cleanup() {
   taskStarted = false
 }
 
-function startTranscription(apiKey: string) {
+function startTranscription(apiKey: string, options: TranscriptionOptions = {}) {
   if (isTranscribing) return
 
   cleanup()
   isTranscribing = true
+  purpose = options.purpose ?? 'screenshot'
   taskId = randomUUID()
+  const silence = options.maxSentenceSilence
 
   ws = new WebSocket(WS_URL, {
     headers: { Authorization: `bearer ${apiKey}` }
@@ -56,7 +96,9 @@ function startTranscription(apiKey: string) {
         model: 'fun-asr-realtime',
         parameters: {
           format: 'pcm',
-          sample_rate: 16000
+          sample_rate: 16000,
+          // The recogniser accepts 200–6000ms
+          ...(silence ? { max_sentence_silence: Math.min(6000, Math.max(200, silence)) } : {})
         },
         input: {}
       }
@@ -81,6 +123,11 @@ function startTranscription(apiKey: string) {
         const text: string = sentence.text || ''
         const sentenceEnd: boolean = sentence.sentence_end === true
 
+        if (purpose === 'conversation') {
+          sentenceListeners.forEach((listener) => listener(text, sentenceEnd))
+          return
+        }
+
         if (sentenceEnd) {
           if (text) {
             accumulatedText += (accumulatedText ? '' : '') + text
@@ -102,13 +149,13 @@ function startTranscription(apiKey: string) {
         console.error('Transcription task failed:', errorMsg)
         sendToRenderer('transcription-error', errorMsg)
         cleanup()
-        sendToRenderer('transcription-stopped')
+        reportStopped()
         return
       }
 
       if (event === 'task-finished') {
         cleanup()
-        sendToRenderer('transcription-stopped')
+        reportStopped()
       }
     } catch (e) {
       console.error('Failed to parse transcription message:', e)
@@ -119,13 +166,13 @@ function startTranscription(apiKey: string) {
     console.error('Transcription WebSocket error:', err)
     sendToRenderer('transcription-error', err.message || 'WebSocket 连接失败')
     cleanup()
-    sendToRenderer('transcription-stopped')
+    reportStopped()
   })
 
   ws.on('close', () => {
     if (isTranscribing) {
       isTranscribing = false
-      sendToRenderer('transcription-stopped')
+      reportStopped()
     }
     ws = null
     taskStarted = false
@@ -151,7 +198,7 @@ function stopTranscription() {
 
   isTranscribing = false
   cleanup()
-  sendToRenderer('transcription-stopped')
+  reportStopped()
 }
 
 function handleAudioChunk(chunk: ArrayBuffer) {
@@ -168,8 +215,8 @@ export function clearTranscriptionText() {
   currentPartial = ''
 }
 
-ipcMain.handle('start-transcription', (_event, apiKey: string) => {
-  startTranscription(apiKey)
+ipcMain.handle('start-transcription', (_event, apiKey: string, options?: TranscriptionOptions) => {
+  startTranscription(apiKey, options)
 })
 
 ipcMain.handle('stop-transcription', () => {

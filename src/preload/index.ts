@@ -6,6 +6,8 @@ import type { ListModelsOptions, ModelListResult } from '../main/model-list'
 import type { DisplayOption } from '../main/take-screenshot'
 import type { RegionPickerData } from '../main/region-picker'
 import type { CaptureRegion, RegionRect } from '../shared/capture-region'
+import type { TranscriptionOptions } from '../main/transcription'
+import type { ConversationSnapshot, HintCard, Utterance } from '../shared/conversation'
 
 // Custom APIs for renderer
 const api = {
@@ -27,6 +29,7 @@ const api = {
 
   // Update app state
   updateAppState: (state: Partial<AppState>) => ipcRenderer.invoke('updateAppState', state),
+  getAppState: () => ipcRenderer.invoke('getAppState') as Promise<AppState>,
   // Listen for app state
   onSyncAppState: (callback: (state: AppState) => void) => {
     ipcRenderer.on('sync-app-state', (_event, state) => {
@@ -66,6 +69,9 @@ const api = {
       | 'clearTranscription'
       | 'pickCaptureRegion'
       | 'cycleScene'
+      | 'generateHint'
+      | 'toggleHintMode'
+      | 'switchMode'
   ) => ipcRenderer.invoke('triggerAction', action),
   setToolbarVisible: (visible: boolean) => ipcRenderer.invoke('setToolbarVisible', visible),
   // Set click-through from the settings page; returns the state main ended up in
@@ -108,6 +114,14 @@ const api = {
   },
   removeCycleSceneListener: () => {
     ipcRenderer.removeAllListeners('cycle-scene')
+  },
+
+  // Shortcut or toolbar asked to show the other mode (截图 ↔ 对话)
+  onSwitchMode: (callback: () => void) => {
+    ipcRenderer.on('switch-mode', () => callback())
+  },
+  removeSwitchModeListener: () => {
+    ipcRenderer.removeAllListeners('switch-mode')
   },
 
   // A screenshot was refused because this profile's model takes no images
@@ -257,8 +271,53 @@ const api = {
   // Select the directory the generated code is written to
   selectCodeDir: () => ipcRenderer.invoke('selectCodeDir') as Promise<string | null>,
 
+  // 对话模式: main owns the conversation, the page takes a snapshot and follows the events
+  getConversationSnapshot: () =>
+    ipcRenderer.invoke('conversation:get-snapshot') as Promise<ConversationSnapshot>,
+  requestHint: () => ipcRenderer.invoke('conversation:request-hint'),
+  stopHints: () => ipcRenderer.invoke('conversation:stop-hints'),
+  clearConversation: () => ipcRenderer.invoke('conversation:clear'),
+  onConversationUtterance: (callback: (utterance: Utterance) => void) => {
+    ipcRenderer.on('conversation-utterance', (_event, utterance: Utterance) => callback(utterance))
+  },
+  onConversationUtteranceRemoved: (callback: (id: number) => void) => {
+    ipcRenderer.on('conversation-utterance-removed', (_event, id: number) => callback(id))
+  },
+  onConversationHint: (callback: (card: HintCard) => void) => {
+    ipcRenderer.on('conversation-hint', (_event, card: HintCard) => callback(card))
+  },
+  onConversationHintChunk: (callback: (id: number, chunk: string) => void) => {
+    ipcRenderer.on('conversation-hint-chunk', (_event, id: number, chunk: string) =>
+      callback(id, chunk)
+    )
+  },
+  onConversationCleared: (callback: () => void) => {
+    ipcRenderer.on('conversation-cleared', () => callback())
+  },
+  onConversationNotice: (callback: (message: string) => void) => {
+    ipcRenderer.on('conversation-notice', (_event, message: string) => callback(message))
+  },
+  // Shortcut or toolbar asked to flip between automatic and manual hints
+  onToggleHintMode: (callback: () => void) => {
+    ipcRenderer.on('toggle-hint-mode', () => callback())
+  },
+  removeConversationListeners: () => {
+    for (const channel of [
+      'conversation-utterance',
+      'conversation-utterance-removed',
+      'conversation-hint',
+      'conversation-hint-chunk',
+      'conversation-cleared',
+      'conversation-notice',
+      'toggle-hint-mode'
+    ]) {
+      ipcRenderer.removeAllListeners(channel)
+    }
+  },
+
   // Transcription
-  startTranscription: (apiKey: string) => ipcRenderer.invoke('start-transcription', apiKey),
+  startTranscription: (apiKey: string, options?: TranscriptionOptions) =>
+    ipcRenderer.invoke('start-transcription', apiKey, options),
   stopTranscription: () => ipcRenderer.invoke('stop-transcription'),
   sendTranscriptionAudioChunk: (chunk: ArrayBuffer) =>
     ipcRenderer.send('transcription-audio-chunk', chunk),

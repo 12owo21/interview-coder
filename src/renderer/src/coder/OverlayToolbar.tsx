@@ -19,12 +19,16 @@ const BUTTON_GAP = 2
 export function OverlayToolbar() {
   const [hoverDelay, setHoverDelay] = useState(0)
   const barRef = useRef<HTMLDivElement>(null)
-  const visibleCount = useVisibleActionCount(barRef)
   const syncAppState = useAppStore((state) => state.syncAppState)
+  const inConversationPage = useAppStore((state) => state.inConversationPage)
+  const actions = TOOLBAR_ACTIONS[inConversationPage ? 'conversation' : 'screenshot']
+  const visibleCount = useVisibleActionCount(barRef, actions.length)
 
   // This window's store is its own copy, so the state main pushes has to be
-  // relayed here; otherwise the toolbar's own buttons show stale state
+  // relayed here; otherwise the toolbar's own buttons show stale state. The
+  // page may have been reported before this window loaded, hence the fetch
   useEffect(() => {
+    window.api.getAppState().then((state) => syncAppState(state))
     window.api.onSyncAppState((state) => syncAppState(state))
     return () => {
       window.api.removeSyncAppStateListener()
@@ -49,7 +53,7 @@ export function OverlayToolbar() {
 
   return (
     <div ref={barRef} className="overlay-toolbar overlay-toolbar-root">
-      {TOOLBAR_ACTIONS.slice(0, visibleCount).map(({ action, Icon }) => (
+      {actions.slice(0, visibleCount).map(({ action, Icon }) => (
         <ToolbarButton key={action} action={action} Icon={Icon} hoverDelay={hoverDelay} />
       ))}
       {/* Always on, width only: the height is the button row. main.css keeps
@@ -66,8 +70,11 @@ export function OverlayToolbar() {
  * sliver of a button. The bar's own width never depends on its children, so
  * measuring it here cannot feed back into the layout.
  */
-function useVisibleActionCount(barRef: RefObject<HTMLDivElement | null>): number {
-  const [count, setCount] = useState(TOOLBAR_ACTIONS.length)
+function useVisibleActionCount(
+  barRef: RefObject<HTMLDivElement | null>,
+  actionCount: number
+): number {
+  const [count, setCount] = useState(actionCount)
 
   useEffect(() => {
     const bar = barRef.current
@@ -76,14 +83,14 @@ function useVisibleActionCount(barRef: RefObject<HTMLDivElement | null>): number
     const measure = () => {
       const available = bar.clientWidth - BAR_PADDING * 2
       const fits = Math.floor((available + BUTTON_GAP) / (BUTTON_SIZE + BUTTON_GAP))
-      setCount(Math.min(TOOLBAR_ACTIONS.length, Math.max(1, fits)))
+      setCount(Math.min(actionCount, Math.max(1, fits)))
     }
 
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(bar)
     return () => observer.disconnect()
-  }, [barRef])
+  }, [barRef, actionCount])
 
   return count
 }

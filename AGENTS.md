@@ -11,6 +11,7 @@ Key capabilities:
 - Multi-screenshot conversation continuity (append screenshots to existing context)
 - Follow-up questions within the same conversation
 - Real-time speech transcription (DashScope Fun-ASR) — transcribed text is attached to screenshots when sent to AI
+- 对话模式 (conversation mode): a second page for voice interviews — the other side's sentences on the left, short AI hints on the right, no screenshots; hints come automatically when a sentence ends or on a shortcut
 - Configurable AI provider (OpenAI, SiliconFlow, OpenRouter, or any OpenAI-compatible API)
 
 ## Tech Stack
@@ -20,8 +21,8 @@ Key capabilities:
 | Framework | Electron 37 (electron-vite 4) |
 | Frontend | React 19, TypeScript 5.8 |
 | Styling | Tailwind CSS v4, shadcn/ui (New York style), Radix primitives |
-| State | Zustand 5 (5 stores, 2 with localStorage persistence) |
-| Routing | react-router v7 (HashRouter, 3 routes) |
+| State | Zustand 5 (6 stores, 2 with localStorage persistence) |
+| Routing | react-router v7 (HashRouter: `/` 截图模式, `/conversation` 对话模式, `/settings`, `/help`, plus `/toolbar` for the toolbar window) |
 | AI | Vercel AI SDK (`ai` + `@ai-sdk/openai`), streaming via `streamText()` |
 | Build | electron-vite (Vite 7), electron-builder 25 |
 | Linting | ESLint 9 (flat config), Prettier |
@@ -34,8 +35,9 @@ src/
 │   ├── index.ts             # App entry: lifecycle, error handling, app.whenReady()
 │   ├── main-window.ts       # BrowserWindow creation (frameless, transparent, always-on-top)
 │   ├── toolbar-window.ts    # Overlay toolbar window: bounds/visibility/opacity glued to main window
-│   ├── shortcuts.ts         # Global shortcuts registration + AI streaming orchestration (largest file)
-│   ├── stream.ts            # consumeStream(), API error messages, image-refusal detection
+│   ├── shortcuts.ts         # Global shortcuts registration + 截图模式 AI streaming orchestration (largest file)
+│   ├── conversation.ts      # 对话模式: utterances, hint cards, automatic / manual hint triggering
+│   ├── stream.ts            # consumeStream() shared by both modes, API error messages, image-refusal detection
 │   ├── ai.ts                # Vercel AI SDK integration, one streaming function per request kind, each with its mode's profile
 │   ├── thinking.ts          # 「关闭思考」: per-platform request-body fields + retry without them when refused
 │   ├── model-list.ts        # `listModels` IPC: a platform's `/models` list (+ SiliconFlow vision flags scraped from its public model square)
@@ -45,7 +47,7 @@ src/
 │   ├── region-picker.ts     # One full-screen window per screen to drag out the capture region
 │   ├── save-screenshot.ts   # Optional auto-save of each screenshot to a folder
 │   ├── save-code.ts         # First code block of a finished answer → clipboard and/or source file
-│   ├── transcription.ts     # DashScope WebSocket real-time speech-to-text
+│   ├── transcription.ts     # DashScope WebSocket real-time speech-to-text (截图模式 text or 对话模式 sentences)
 │   ├── window-resize.ts     # Cursor-tracking resize for the frameless windows
 │   ├── auto-updater.ts      # electron-updater (non-macOS only)
 │   └── index.d.ts           # global.mainWindow type declaration
@@ -62,14 +64,20 @@ src/
     └── src/
         ├── main.tsx          # React root render
         ├── App.tsx           # Router + settings sync + shortcut init + Toaster
-        ├── coder/            # Main page: screenshot display + AI solution stream
-        │   ├── index.tsx     # CoderPage layout + state sync + transcription lifecycle
-        │   ├── AppHeader.tsx # Draggable title bar with nav buttons
+        ├── coder/            # 截图模式 page: screenshot display + AI solution stream
+        │   ├── index.tsx     # CoderPage layout + transcription lifecycle
+        │   ├── AppHeader.tsx # Draggable title bar: mode switch, scene · model, nav buttons (shared by both modes)
         │   ├── AppContent.tsx# Screenshots gallery + markdown solution + error banner
         │   ├── AppStatusBar.tsx    # Loading indicator, follow-up dialog, shortcut hints
         │   ├── TranscriptionBar.tsx # Absolute-positioned real-time transcription overlay
         │   ├── OverlayToolbar.tsx  # Contents of the toolbar window (route `/toolbar`)
         │   └── PrerequisitesChecker.tsx  # Modal for API key setup
+        ├── conversation/     # 对话模式 page (`/conversation`)
+        │   ├── index.tsx     # Layout + snapshot / event sync with main's conversation
+        │   ├── TranscriptPanel.tsx # The other side's sentences; a hovered hint highlights its own
+        │   ├── HintPanel.tsx       # Hint cards + empty states
+        │   ├── ConversationStatusBar.tsx # Listening, 自动/手动, hint / stop buttons with shortcuts
+        │   └── listening.ts  # Start / stop recognition (`purpose: 'conversation'`), toggle hint mode
         ├── settings/         # Settings page: left nav, one group at a time (`?tab=`)
         │   ├── index.tsx     # Shell: nav (通用: AI 模型 / 语音 / 界面与隐私 / 快捷键; 模式: 截图模式 / 对话模式)
         │   ├── sections/     # One component per nav entry
@@ -97,12 +105,14 @@ src/
         │   └── ui/           # shadcn/ui primitives (button, dialog, select, etc.)
         ├── lib/
         │   ├── store/        # Zustand stores
-        │   │   ├── app.ts       # ignoreMouse state, synced from main process
+        │   │   ├── app.ts       # ignoreMouse / inConversationPage, synced from main process
+        │   │   ├── conversation.ts # 对话模式 page copy of main's utterances + hint cards
         │   │   ├── settings.ts  # API config, model, prompt scenes, opacity, toolbar (persisted v8)
         │   │   ├── shortcuts.ts # Shortcut bindings (persisted v5, with migration)
         │   │   ├── solution.ts  # Loading state, solution chunks, screenshots, errors
         │   │   └── transcription.ts # Transcription state: isTranscribing, text, error
-        │   ├── toolbar-actions.ts # Toolbar button list (action + icon + label), shared with help
+        │   ├── toolbar-actions.ts # Toolbar button lists per mode (action + icon + label), shared with help
+        │   ├── use-mode-page.ts   # useModePage(): what both mode pages do alike; MODE_PATHS / MODE_NAMES
         │   ├── providers.ts  # Known platforms + each one's spelling of the same model
         │   ├── platform-models.ts # usePlatformModels(): cached `/models` list per URL + key
         │   ├── model-switch.ts    # changeApiBaseURL(): switch URL, toast the linked model change
@@ -170,7 +180,7 @@ src/
 - `getDisplays` — connected screens (numbered left to right) for the capture-screen picker
 - `pickCaptureRegion` — cover every screen with a region picker; resolves with the region, or null if cancelled
 - `getRegionPickerData` / `region-picker-ready` / `finish-region-picker` (the last two `send`) — a picker window fetches its frozen screen, asks to be shown once painted, and reports the result
-- `updateAppState` — sync `inCoderPage`, `inSettingsPage`
+- `updateAppState` / `getAppState` — sync `inCoderPage`, `inConversationPage`, `inSettingsPage`; the toolbar window fetches it on load
 - `setIgnoreMouse` — set click-through from the settings page switch
 - `initShortcuts` / `getShortcuts` / `updateShortcuts` — shortcut management
 - `stopSolutionStream` — abort current AI stream
@@ -178,7 +188,8 @@ src/
 - `triggerAction` / `setToolbarVisible` — overlay toolbar: run a shortcut action, toggle the window
 - `selectScreenshotDir` / `selectCodeDir` — folder pickers for the auto-save settings
 - `window-resize-start` / `window-resize-stop` (`send`, not `invoke`) — begin/end a cursor-tracked window resize
-- `start-transcription` / `stop-transcription` — speech transcription lifecycle
+- `start-transcription` / `stop-transcription` — speech transcription lifecycle; start takes `{ purpose, maxSentenceSilence }`
+- `conversation:get-snapshot` / `conversation:request-hint` / `conversation:stop-hints` / `conversation:clear` — 对话模式
 - `get-transcription-text` / `clear-transcription-text` — read/clear accumulated text
 
 **Main → Renderer (send):**
@@ -187,9 +198,12 @@ src/
 - `solution-clear` / `solution-chunk` / `solution-complete` / `solution-stopped` / `solution-error` — AI streaming lifecycle
 - `ai-loading-start` / `ai-loading-end` — loading state
 - `solution-duration` — how long the finished request took (ms), timed in main from the key press
-- `switch-api-profile` — step 截图模式's AI profile (`1` / `-1`); the list lives in the renderer store
-- `cycle-scene` — step to the next prompt scene; the renderer owns the list and syncs the new `customPrompt` back
+- `switch-api-profile` — step the current mode's AI profile (`1` / `-1`); the list lives in the renderer store
+- `cycle-scene` — step the current mode to its next prompt scene; the renderer owns the list and syncs the new prompt back
+- `switch-mode` — show the other mode's page (shortcut / toolbar); the renderer owns the routes
 - `vision-unsupported` — a screenshot was refused for want of image input (profile id); the renderer marks the profile text-only if nothing better is known
+- `toggle-hint-mode` — flip 对话模式 between automatic and manual hints; the renderer owns the setting
+- `conversation-utterance` / `conversation-utterance-removed` / `conversation-hint` / `conversation-hint-chunk` / `conversation-cleared` / `conversation-notice` — 对话模式 state from main
 - `thinking-unsupported` — the active model refused 「关闭思考」 (model name); sent once per model per session, the request has already been resent without it
 - `capture-region-picked` — a new capture region, from whichever entry point started the pick
 - `scroll-page-up` / `scroll-page-down` — keyboard-driven scroll
@@ -205,7 +219,8 @@ src/
 | `useShortcutsStore` | `lib/store/shortcuts.ts` | Yes (v5) | `shortcuts` (action → key mapping with categories); `merge` adds new default actions on every load, so a new shortcut needs no `version` bump |
 | `useSolutionStore` | `lib/store/solution.ts` | No | `isLoading`, `solutionChunks`, `screenshotData`, `errorMessage`, `durationMs` |
 | `useTranscriptionStore` | `lib/store/transcription.ts` | No | `isTranscribing`, `transcriptionText`, `errorMessage` |
-| `useAppStore` | `lib/store/app.ts` | No | `ignoreMouse` |
+| `useConversationStore` | `lib/store/conversation.ts` | No | `utterances`, `hints`, `errorMessage`, `focusedHintId` |
+| `useAppStore` | `lib/store/app.ts` | No | `ignoreMouse`, `inConversationPage` |
 
 Settings are bidirectionally synced: renderer persists to localStorage, and on mount syncs to main process via `updateAppSettings()`. Main process `.env` values serve as initial defaults only.
 
@@ -231,7 +246,7 @@ A second `BrowserWindow` (`src/main/toolbar-window.ts`) that renders the `/toolb
 - It is a separate renderer process, so its Zustand store is a **separate copy** that does not see changes made in the main window. Settings it needs must be pushed from main (`sync-toolbar-settings`), not read from the store.
 - Buttons carry no `title`: native tooltips are drawn outside the window and are not covered by content protection
 - It never receives a `click` on Windows: `focusable: false` makes Chromium answer the press's WM_MOUSEACTIVATE with `MA_NOACTIVATEANDEAT`, so the button-down is dropped by the OS. Only the release and the moves arrive — anything interactive in this window must hang off `mouseup`/`pointermove`, never `click` or `pointerdown`
-- `TOOLBAR_ACTIONS` (`lib/toolbar-actions.ts`) drives both the toolbar and its help page section; `triggerAction` is validated against `clickableActions` in `shortcuts.ts`
+- `TOOLBAR_ACTIONS` (`lib/toolbar-actions.ts`) holds one list per mode and drives both the toolbar and its help page section; the toolbar picks the list from `inConversationPage` (pushed by main, fetched with `getAppState` on load). `triggerAction` is validated against `clickableActions` in `shortcuts.ts`
 - Resizing the toolbar window never rescales its buttons: `OverlayToolbar` measures the bar and renders only the actions that fit, dropping the rest from the end
 
 ### Window Resizing
@@ -257,7 +272,7 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - System prompts are maintained in the renderer settings store (`PRESET_SCENE_PROMPTS` in `lib/store/settings.ts`) as "prompt scenes". Each scene belongs to one mode (`mode`, absent = 截图模式) and each mode has its own active scene; their prompts are synced to main as `customPrompt` (截图模式) and `conversationPrompt` (对话模式)
 - Preset scenes can be deleted too (at least one scene per mode always remains). `merge` rebuilds the presets on every load so new ones reach existing users, so a deleted preset's id goes into `removedPresetSceneIds` and is skipped; 「恢复预设场景」 (`restorePresetScenes(mode)`) brings back that mode's presets with default prompts
 - The system prompt is read per request, so switching scenes (`cycleScene` shortcut / toolbar) applies from the next request and keeps `conversationMessages`: a new screenshot starts a new conversation anyway, and a follow-up after switching needs what it follows up on. An answer already streaming keeps its prompt. The header shows `scene · model`, since a shortcut or a toolbar hover can switch it unnoticed
-- Three streaming functions: `getSolutionStream` (first screenshot), `getFollowUpStream` (follow-up), `getGeneralStream` (multi-screenshot), all run through `runAnswer()` in `shortcuts.ts`
+- Streaming functions: `getSolutionStream` (first screenshot), `getFollowUpStream` (follow-up), `getGeneralStream` (multi-screenshot), all run through `runAnswer()` in `shortcuts.ts`; `getHintStream` (对话模式, see below)
 - 「关闭思考」 (`disableThinking`, per profile, off by default): the SDK has no field for it and every platform spells it differently, so `createThinkingOffFetch()` in `thinking.ts` wraps `fetch` and merges the fields into the request body — OpenRouter `reasoning: { enabled: false }`, OpenAI host or a `gpt-`/`o<n>` model name `reasoning_effort: 'none'`, everyone else both `thinking: { type: 'disabled' }` and `enable_thinking: false`. OpenAI rejects any unknown field, and thinking-only models reject the switch, so a 400/422 whose body mentions thinking/reasoning is resent without the fields and that base URL + model is remembered for the session. The switch never makes a request fail; at worst it costs one extra round trip
 - Conversation history (`conversationMessages`) is maintained in `shortcuts.ts` as `ModelMessage[]`
 - When an answer finishes naturally (not stopped, not failed), `handleGeneratedCode()` in `save-code.ts` copies its first code block to the clipboard and/or saves it as `<base><n>.<ext>` (extension from the fence language); both are opt-in and silent
@@ -272,6 +287,17 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - The pickers cover every screen, so any exit — Enter / Esc, closing one, a crashed or unresponsive renderer, a 5-minute timeout — closes them all and restores the main window
 - The dimming around the selection is four plain panels: a `clip-path` hole or a huge `box-shadow` did not paint over the full-screen image
 - A region whose screen is disconnected is kept but ignored until it comes back, so the whole screen is captured meanwhile
+
+### Conversation Mode (对话模式)
+
+`/conversation` turns what the other side of a call says into hints, without screenshots. Main owns the conversation (`src/main/conversation.ts`); the page shows a copy, fetched with `conversation:get-snapshot` on mount and kept current by events, so visiting the settings mid-call loses nothing:
+- Recognition runs with `purpose: 'conversation'` and `max_sentence_silence: conversationSilenceMs`; `transcription.ts` then hands every sentence revision to `conversation.ts` instead of accumulating 截图模式's text. Listening keeps running on the settings / help pages and stops when 截图模式's page mounts
+- It is meant for system audio: in an online call that is only the other side, so a finished sentence can trigger a hint without speaker detection
+- Automatic (`conversationHintMode: 'auto'`): a finished sentence with at least `conversationMinChars` meaningful characters asks for a hint at once, covering every sentence since the last hint. If the other side keeps talking (a new sentence reaches the minimum while the automatic hint streams) the hint is withdrawn (`waiting`) and rewritten into the same card when they finish — or when that sentence comes to nothing, or listening stops
+- Shortcut / button (`generateHint`, either mode): brings the card being written or waiting up to date, else opens one for everything not yet hinted (a sentence still being spoken included), else rewrites the last hint with 「换一个角度」
+- Several cards may stream at once. A card restarted by a newer request bumps its `generations` entry, so the stream it replaced never writes to it again
+- Each request sends the recent sentences as context (20 sentences / 1500 chars) plus the ones the hint is for; earlier hints are not sent back, so requests stay small
+- The preset prompts ask for 「（无需回应）」 when nothing needs an answer; the page dims those cards
 
 ### Stream Abort Pattern
 
@@ -289,6 +315,7 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - On screenshot (`takeScreenshot` / `appendScreenshot`), accumulated transcription text is automatically attached to the AI prompt, then cleared
 - `clearTranscription` shortcut clears text without submitting to AI
 - Transcription shortcuts are disabled in settings UI when `dashscopeApiKey` is not configured
+- In 对话模式 the same shortcuts start / stop listening and clear the whole conversation
 
 ### Shortcut System
 
@@ -298,6 +325,8 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - Shortcut actions are string-keyed callbacks in `shortcuts.ts`
 - Default shortcuts use `platformAlt` (`Alt` on macOS, `CommandOrControl` on Windows)
 - New actions also need a label in `settings/CustomShortcuts.tsx` and a description in `help/Shortcuts.tsx`
+- Categories: `Window Management`, `Screenshot` (截图模式 only), `Conversation` (对话模式 only), `AI` (acts on whichever mode is on screen: stop, profile, scene, transcription), `Navigation`, `Window Movement`. Only the key of a stored binding is the user's; `merge` takes the category from the code
+- Actions acting on "the current mode" check `inModePage()` (`state.ts`) and are answered by `useModePage()` on either page
 
 ### Mouse Click-through
 
@@ -363,12 +392,14 @@ These are read by dotenv in the main process and merged with renderer-side setti
 
 5. **No shared types directory**: Main process types (`AppSettings`, `AppState`) are imported directly by the preload script from `../main/settings` and `../main/state`. This works because preload shares the Node.js tsconfig. Runtime code both sides need goes in `src/shared/` (included by both tsconfigs, imported by relative path) and must stay free of Electron, DOM and Node APIs.
 
-6. **Streaming orchestration is in `shortcuts.ts`**: Despite the filename, this 800+ line file is the central orchestrator for both global shortcuts AND AI streaming logic. It manages conversation history, abort controllers, and IPC communication for the entire AI workflow.
+6. **Streaming orchestration is in `shortcuts.ts`**: Despite the filename, this 850+ line file is the central orchestrator for both global shortcuts AND 截图模式's AI streaming. It manages conversation history, abort controllers, and IPC communication for that workflow; 对话模式's lives in `conversation.ts`.
 
-7. **Window movement**: The window can be moved via keyboard shortcuts in 200px steps (up/down/left/right), and resized by dragging its edges (see Window Resizing).
+7. **Startup mode**: `main.tsx` sets the hash to `#/conversation` before rendering when `lastMode` says so; the back buttons of the settings / help pages return to `lastMode` too.
 
-8. **macOS auto-update is disabled**: `publish: null` in electron-builder.yml for mac target. Auto-update only works on Windows.
+8. **Window movement**: The window can be moved via keyboard shortcuts in 200px steps (up/down/left/right), and resized by dragging its edges (see Window Resizing).
 
-9. **macOS and Windows only**: Linux is not a supported or built target.
+9. **macOS auto-update is disabled**: `publish: null` in electron-builder.yml for mac target. Auto-update only works on Windows.
 
-10. **Prompt files are Prettier-ignored**: `src/renderer/src/lib/store/prompts/` is listed in `.prettierignore` — Prettier rewrites the literal ``` fences inside those prompts, which changes what the model is told.
+10. **macOS and Windows only**: Linux is not a supported or built target.
+
+11. **Prompt files are Prettier-ignored**: `src/renderer/src/lib/store/prompts/` is listed in `.prettierignore` — Prettier rewrites the literal ``` fences inside those prompts, which changes what the model is told.

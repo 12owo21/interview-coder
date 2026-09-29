@@ -94,7 +94,7 @@ export function AppearanceSection() {
 
           <Field
             label="悬浮工具条"
-            note="在主窗口上方显示一排按钮，可用鼠标点击替代快捷键操作，详见帮助中心"
+            note="在主窗口上方显示一排按钮，可用鼠标点击替代快捷键操作，按钮随模式变化，详见帮助中心"
           >
             <Switch
               className="scale-y-90"

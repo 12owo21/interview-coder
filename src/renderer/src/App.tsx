@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { HashRouter, Routes, Route, useLocation } from 'react-router'
 import { Toaster, toast } from 'sonner'
 import CoderPage from '@/coder'
+import ConversationPage from '@/conversation'
 import SettingsPage from '@/settings'
 import HelpPage from '@/help'
 import { OverlayToolbar } from '@/coder/OverlayToolbar'
@@ -10,6 +11,7 @@ import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { getCloneableFields } from '@/lib/utils'
 import { applyTheme } from '@/lib/theme'
 import { WindowResizeHandles } from '@/components/WindowResizeHandles'
+import { MODE_PATHS } from '@/lib/use-mode-page'
 
 export default function App() {
   const [initialized, setInitialized] = useState(false)
@@ -86,6 +88,7 @@ export default function App() {
         <WindowResizeController />
         <Routes>
           <Route index element={<CoderPage />} />
+          <Route path="conversation" element={<ConversationPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="help" element={<HelpPage />} />
           <Route path="toolbar" element={<OverlayToolbar />} />
@@ -113,7 +116,8 @@ function ToolbarVisibilityController() {
   useEffect(() => {
     // The toolbar window renders this app too, but must not drive its own visibility
     if (location.pathname === '/toolbar') return
-    void window.api.setToolbarVisible(location.pathname === '/' && showOverlayToolbar)
+    const onModePage = Object.values(MODE_PATHS).includes(location.pathname)
+    void window.api.setToolbarVisible(onModePage && showOverlayToolbar)
   }, [location.pathname, showOverlayToolbar])
 
   return null

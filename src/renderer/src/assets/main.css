@@ -33,6 +33,17 @@
   color: var(--app-surface-fg);
 }
 
+/* 对话模式: one surface under the columns and the status bar; each column scrolls on its own */
+.conversation-page {
+  background: var(--app-surface-bg);
+  color: var(--app-surface-fg);
+}
+
+.panel-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-scrollbar-thumb) transparent;
+}
+
 .transcription-scroll {
   overflow: auto;
   scrollbar-gutter: stable;

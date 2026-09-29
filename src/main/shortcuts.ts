@@ -15,10 +15,11 @@ import type { CaptureRegion } from '../shared/capture-region'
 import { saveScreenshotToDisk } from './save-screenshot'
 import { handleGeneratedCode } from './save-code'
 import { getSolutionStream, getFollowUpStream, getGeneralStream } from './ai'
-import { state, setPageChangeHandler } from './state'
+import { state, setPageChangeHandler, inModePage } from './state'
 import { settings, getModeProfile } from './settings'
 import { getTranscriptionText, clearTranscriptionText } from './transcription'
 import { consumeStream, extractErrorMessage, isImageInputRefused } from './stream'
+import { requestHint, stopHints, clearConversation } from './conversation'
 
 type Shortcut = {
   action: string
@@ -202,7 +203,7 @@ function keepWindowInFront(window: BrowserWindow) {
  */
 function adjustOpacity(delta: number) {
   const mainWindow = global.mainWindow
-  if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+  if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
   mainWindow.webContents.send('adjust-opacity', delta)
 }
 
@@ -389,6 +390,13 @@ async function runAnswer(
   }
 }
 
+/** Ask the renderer to show the other mode; it owns the routes */
+function switchMode() {
+  const mainWindow = global.mainWindow
+  if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
+  mainWindow.webContents.send('switch-mode')
+}
+
 const callbacks: Record<string, () => void> = {
   hideOrShowMainWindow: async () => {
     const mainWindow = global.mainWindow
@@ -550,25 +558,26 @@ const callbacks: Record<string, () => void> = {
     )
   },
 
-  // Stop current AI solution stream
+  // Stop current AI solution stream, or 对话模式's hints
   stopSolutionStream: () => {
-    abortCurrentStream('user')
+    if (state.inConversationPage) stopHints()
+    else abortCurrentStream('user')
   },
 
   /**
-   * Ask the renderer to step 截图模式 through the saved AI profiles. The list
-   * lives in the renderer store (persisted there), so main only relays the
-   * direction.
+   * Ask the renderer to step the current mode through the saved AI profiles.
+   * The list lives in the renderer store (persisted there), so main only
+   * relays the direction.
    */
   nextApiProfile: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
     mainWindow.webContents.send('switch-api-profile', 1)
   },
 
   previousApiProfile: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
     mainWindow.webContents.send('switch-api-profile', -1)
   },
 
@@ -580,7 +589,7 @@ const callbacks: Record<string, () => void> = {
    */
   cycleScene: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
     mainWindow.webContents.send('cycle-scene')
   },
 
@@ -598,13 +607,13 @@ const callbacks: Record<string, () => void> = {
 
   pageUp: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
     mainWindow.webContents.send('scroll-page-up')
   },
 
   pageDown: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
     mainWindow.webContents.send('scroll-page-down')
   },
 
@@ -638,16 +647,36 @@ const callbacks: Record<string, () => void> = {
 
   toggleTranscription: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed() || !inModePage()) return
     mainWindow.webContents.send('toggle-transcription')
   },
 
+  // 对话模式 starts the conversation over; 截图模式 drops the text not yet sent
   clearTranscription: () => {
     const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed() || !state.inCoderPage) return
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (state.inConversationPage) {
+      clearConversation()
+      return
+    }
+    if (!state.inCoderPage) return
     clearTranscriptionText()
     mainWindow.webContents.send('transcription-cleared')
   },
+
+  // 对话模式: a hint now, whatever the automatic mode is waiting for
+  generateHint: () => {
+    if (state.inConversationPage) requestHint()
+  },
+
+  // 对话模式: the renderer owns the setting, main reads it back on the next sentence
+  toggleHintMode: () => {
+    const mainWindow = global.mainWindow
+    if (!mainWindow || mainWindow.isDestroyed() || !state.inConversationPage) return
+    mainWindow.webContents.send('toggle-hint-mode')
+  },
+
+  switchMode,
 
   // Works on every page: it only sets up future screenshots
   pickCaptureRegion: () => {
@@ -671,7 +700,10 @@ const clickableActions = new Set([
   'toggleTranscription',
   'clearTranscription',
   'pickCaptureRegion',
-  'cycleScene'
+  'cycleScene',
+  'generateHint',
+  'toggleHintMode',
+  'switchMode'
 ])
 
 function unregisterShortcut(action: string) {

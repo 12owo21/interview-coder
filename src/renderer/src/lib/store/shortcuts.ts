@@ -35,10 +35,20 @@ function isPersistedShortcutsState(value: unknown): value is PersistedShortcutsS
   return typeof value === 'object' && value !== null && 'shortcuts' in value
 }
 
+/**
+ * Categories: `Window Management`, `Screenshot` (截图模式 only), `Conversation`
+ * (对话模式 only), `AI` (acts on whichever mode is on screen), `Navigation`,
+ * `Window Movement`. The category comes from here even for stored bindings.
+ */
 const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
   hideOrShowMainWindow: {
     action: 'hideOrShowMainWindow',
     key: `${platformAlt}+H`,
+    category: 'Window Management'
+  },
+  switchMode: {
+    action: 'switchMode',
+    key: `${platformAlt}+Shift+M`,
     category: 'Window Management'
   },
   ignoreOrEnableMouse: {
@@ -59,47 +69,57 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
   takeScreenshot: {
     action: 'takeScreenshot',
     key: `${platformAlt}+Enter`,
-    category: 'Screenshot & AI'
+    category: 'Screenshot'
   },
   appendScreenshot: {
     action: 'appendScreenshot',
     key: `${platformAlt}+Shift+Enter`,
-    category: 'Screenshot & AI'
+    category: 'Screenshot'
   },
   pickCaptureRegion: {
     action: 'pickCaptureRegion',
     key: `${platformAlt}+Shift+R`,
-    category: 'Screenshot & AI'
+    category: 'Screenshot'
+  },
+  generateHint: {
+    action: 'generateHint',
+    key: `${platformAlt}+G`,
+    category: 'Conversation'
+  },
+  toggleHintMode: {
+    action: 'toggleHintMode',
+    key: `${platformAlt}+Shift+G`,
+    category: 'Conversation'
   },
   stopSolutionStream: {
     action: 'stopSolutionStream',
     key: `${platformAlt}+.`,
-    category: 'Screenshot & AI'
+    category: 'AI'
   },
   previousApiProfile: {
     action: 'previousApiProfile',
     key: `${platformAlt}+[`,
-    category: 'Screenshot & AI'
+    category: 'AI'
   },
   nextApiProfile: {
     action: 'nextApiProfile',
     key: `${platformAlt}+]`,
-    category: 'Screenshot & AI'
+    category: 'AI'
   },
   cycleScene: {
     action: 'cycleScene',
     key: `${platformAlt}+Shift+P`,
-    category: 'Screenshot & AI'
+    category: 'AI'
   },
   toggleTranscription: {
     action: 'toggleTranscription',
     key: `${platformAlt}+T`,
-    category: 'Screenshot & AI'
+    category: 'AI'
   },
   clearTranscription: {
     action: 'clearTranscription',
     key: `${platformAlt}+Shift+T`,
-    category: 'Screenshot & AI'
+    category: 'AI'
   },
   pageUp: { action: 'pageUp', key: 'CommandOrControl+J', category: 'Navigation' },
   pageDown: { action: 'pageDown', key: 'CommandOrControl+K', category: 'Navigation' },
@@ -196,9 +216,13 @@ export const useShortcutsStore = create<ShortcutsStore>()(
         // defaults are the floor and the stored bindings win on top of them.
         // `merge` runs on every rehydrate, unlike `migrate` which only runs
         // when the version changes. Stored actions that no longer exist are dropped.
+        // Only the key is the user's: the category and default follow the code,
+        // so regrouping the actions reaches existing users too
         const shortcuts = { ...current.shortcuts }
         for (const [action, shortcut] of Object.entries(stored)) {
-          if (shortcuts[action]) shortcuts[action] = shortcut
+          if (shortcuts[action] && shortcut?.key) {
+            shortcuts[action] = { ...shortcuts[action], key: shortcut.key }
+          }
         }
         return { ...current, shortcuts }
       }

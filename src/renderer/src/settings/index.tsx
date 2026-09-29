@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/lib/store/settings'
 import { useAppStore } from '@/lib/store/app'
+import { MODE_PATHS } from '@/lib/use-mode-page'
 import { AiModelsSection } from './sections/AiModelsSection'
 import { VoiceSection } from './sections/VoiceSection'
 import { AppearanceSection } from './sections/AppearanceSection'
@@ -52,6 +53,7 @@ export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const requested = searchParams.get('tab') as Tab | null
   const tab: Tab = requested && TABS.includes(requested) ? requested : 'ai'
+  const lastMode = useSettingsStore((state) => state.lastMode)
   const setActiveProfile = useSettingsStore((state) => state.setActiveProfile)
   const syncAppState = useAppStore((state) => state.syncAppState)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -110,7 +112,7 @@ export default function SettingsPage() {
       <div id="app-header" className="flex items-center">
         <div className="actions">
           <Button variant="ghost" asChild size="icon" className="w-12 mr-2 rounded-none">
-            <Link to="/">
+            <Link to={MODE_PATHS[lastMode]}>
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>

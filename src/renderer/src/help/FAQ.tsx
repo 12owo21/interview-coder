@@ -91,6 +91,26 @@ const faqs = [
         更好地理解题意。使用前需在「设置 → 语音」中配置百炼平台 API Key，然后按下
         <ShortcutRenderer shortcut={`${platformAlt}+T`} className="text-xs mx-1" />
         开始/暂停转录。转录文本会在截图时自动附带提交给 AI。
+        如果想根据对方说的话实时出提示、不需要截图，请用「对话模式」。
+      </span>
+    )
+  },
+  {
+    question: '对话模式是什么？和语音转录有什么区别？',
+    answer: (
+      <span>
+        对话模式专为语音面试设计：左边逐句显示对方（面试官）说的话，右边给出简短的回答提示，全程不截图。
+        点窗口顶部的「对话」，或按
+        <ShortcutRenderer shortcut={`${platformAlt}+Shift+M`} className="text-xs mx-1" />
+        进入，再按
+        <ShortcutRenderer shortcut={`${platformAlt}+T`} className="text-xs mx-1" />
+        开始监听。默认「自动」出提示：对方说完一句话就立即生成，如果对方其实还没说完，会等说完后重新生成；
+        也可以随时按
+        <ShortcutRenderer shortcut={`${platformAlt}+G`} className="text-xs mx-1" />
+        立即出提示，或按
+        <ShortcutRenderer shortcut={`${platformAlt}+Shift+G`} className="text-xs mx-1" />
+        切换为「手动」，只在按快捷键时出。对话模式可以单独选用一个 AI 配置，建议选关闭思考的快模型，
+        在「设置 → 对话模式」中设置。它采集的是系统音频（会议里对方的声音），自己说话不会触发提示。
       </span>
     )
   },

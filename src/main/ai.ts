@@ -93,3 +93,8 @@ export function getGeneralStream(messages: ModelMessage[], abortSignal?: AbortSi
     '注意：如果有多张截图，请结合所有截图内容进行完整分析，不要遗漏任何部分。'
   )
 }
+
+/** 对话模式: a hint for what the other side just said, with the conversation profile */
+export function getHintStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
+  return streamWith('conversation', messages, abortSignal)
+}

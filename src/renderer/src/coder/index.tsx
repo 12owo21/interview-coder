@@ -1,10 +1,9 @@
 import { useEffect } from 'react'
-import { toast } from 'sonner'
 import { useSettingsStore } from '@/lib/store/settings'
-import { useAppStore } from '@/lib/store/app'
 import { useTranscriptionStore } from '@/lib/store/transcription'
 import { useSolutionStore } from '@/lib/store/solution'
 import { startAudioCapture, stopAudioCapture } from '@/lib/audio-capture'
+import { useModePage } from '@/lib/use-mode-page'
 
 import { AppHeader } from './AppHeader'
 import { AppContent } from './AppContent'
@@ -13,87 +12,22 @@ import { PrerequisitesChecker } from './PrerequisitesChecker'
 import { TranscriptionBar } from './TranscriptionBar'
 
 export default function CoderPage() {
-  const { opacity, dashscopeApiKey } = useSettingsStore()
-  const { syncAppState } = useAppStore()
+  const { dashscopeApiKey } = useSettingsStore()
   const { isTranscribing, setIsTranscribing, setTranscriptionText, clearText } =
     useTranscriptionStore()
   const { setErrorMessage } = useSolutionStore()
 
-  useEffect(() => {
-    document.body.style.opacity = opacity.toString()
-    return () => {
-      document.body.style.opacity = ''
-    }
-  }, [opacity])
+  useModePage('screenshot')
 
+  // 对话模式 keeps listening while its user visits the settings; coming here
+  // instead ends that conversation's recognition, whose sentences would
+  // otherwise never reach this page's transcript
   useEffect(() => {
-    window.api.onAdjustOpacity((delta) => {
-      useSettingsStore.getState().adjustOpacity(delta)
-    })
-    return () => {
-      window.api.removeAdjustOpacityListener()
-    }
+    if (!useTranscriptionStore.getState().isTranscribing) return
+    stopAudioCapture()
+    void window.api.stopTranscription()
+    useTranscriptionStore.getState().setIsTranscribing(false)
   }, [])
-
-  useEffect(() => {
-    window.api.onSwitchApiProfile((direction) => {
-      const store = useSettingsStore.getState()
-      const profile = store.cycleProfile('screenshot', direction)
-      if (!profile) {
-        toast('没有其他能识图的配置可以切换')
-        return
-      }
-      toast(`已切换到「${profile.name}」`, {
-        description: `${profile.model || '未设置模型'}${profile.disableThinking ? ' · 关闭思考' : ''}`,
-        duration: 3000
-      })
-    })
-    return () => {
-      window.api.removeSwitchApiProfileListener()
-    }
-  }, [])
-
-  useEffect(() => {
-    window.api.onCycleScene(() => {
-      const name = useSettingsStore.getState().cycleScene('screenshot')
-      if (!name) return
-      // An answer already streaming keeps the prompt it started with
-      toast(`已切换到「${name}」`, { description: '下次提问生效', duration: 3000 })
-    })
-    return () => {
-      window.api.removeCycleSceneListener()
-    }
-  }, [])
-
-  // Main already resent the request without the switch; this only explains why
-  // the answer may be slower than the setting promises
-  useEffect(() => {
-    window.api.onThinkingUnsupported((model) => {
-      toast('当前模型不支持关闭思考，已按默认方式请求', {
-        description: `${model}：可在设置里关掉这个配置的「关闭思考」`,
-        duration: 5000
-      })
-    })
-    return () => {
-      window.api.removeThinkingUnsupportedListener()
-    }
-  }, [])
-
-  useEffect(() => {
-    window.api.updateAppState({ inCoderPage: true })
-    return () => {
-      window.api.updateAppState({ inCoderPage: false })
-    }
-  }, [])
-
-  useEffect(() => {
-    window.api.onSyncAppState((state) => {
-      syncAppState(state)
-    })
-    return () => {
-      window.api.removeSyncAppStateListener()
-    }
-  }, [syncAppState])
 
   useEffect(() => {
     const handleToggle = async () => {
@@ -160,7 +94,7 @@ export default function CoderPage() {
 
   return (
     <div className="relative h-screen">
-      <AppHeader />
+      <AppHeader mode="screenshot" />
       <AppContent />
       <TranscriptionBar />
       <AppStatusBar />

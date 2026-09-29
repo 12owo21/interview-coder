@@ -29,6 +29,7 @@ process.on('uncaughtException', (error) => {
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import './shortcuts'
 import './transcription'
+import './conversation'
 import './window-resize'
 import './model-list'
 import { createWindow } from './main-window'

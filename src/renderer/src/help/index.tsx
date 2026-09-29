@@ -12,6 +12,8 @@ import {
 import { Button } from '@/components/ui/button'
 import ShortcutRenderer from '@/components/ShortcutRenderer'
 import { platformAlt } from '@/lib/utils/env'
+import { useSettingsStore } from '@/lib/store/settings'
+import { MODE_PATHS } from '@/lib/use-mode-page'
 import { HelpSection } from './components'
 import { Shortcuts } from './Shortcuts'
 import { OverlayToolbarHelp } from './OverlayToolbar'
@@ -19,6 +21,7 @@ import { FAQ } from './FAQ'
 
 export default function HelpPage() {
   const [appVersion, setAppVersion] = useState('')
+  const lastMode = useSettingsStore((state) => state.lastMode)
 
   useEffect(() => {
     window.api.getAppVersion().then(setAppVersion)
@@ -30,7 +33,7 @@ export default function HelpPage() {
       <div id="app-header" className="flex items-center">
         <div className="actions">
           <Button variant="ghost" asChild size="icon" className="w-12 mr-2 rounded-none">
-            <Link to="/">
+            <Link to={MODE_PATHS[lastMode]}>
               <ArrowLeft className="h-5 w-5" />
             </Link>
           </Button>
@@ -92,6 +95,16 @@ export default function HelpPage() {
             <h3 className="font-semibold mb-2">2. 查看结果</h3>
             <p className="text-sm text-gray-700">
               截图完成后，系统会根据当前选择的提示词场景自动分析内容，给出解题思路和答案。
+            </p>
+          </div>
+          <div className="border border-gray-400 rounded-lg p-4">
+            <h3 className="font-semibold mb-2">3. 语音面试用对话模式</h3>
+            <p className="text-sm text-gray-700">
+              点窗口顶部的「对话」切换到对话模式，按
+              <ShortcutRenderer shortcut={`${platformAlt}+T`} className="text-xs mx-1" />
+              开始监听。对方说完一句话，右侧就会给出回答提示；按
+              <ShortcutRenderer shortcut={`${platformAlt}+G`} className="text-xs mx-1" />
+              可以立即出提示。详见下方常见问题。
             </p>
           </div>
         </HelpSection>
