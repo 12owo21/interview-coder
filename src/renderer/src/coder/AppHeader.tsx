@@ -11,7 +11,7 @@ import { useElapsed } from '@/lib/use-elapsed'
 import { MODE_NAMES, MODE_PATHS } from '@/lib/use-mode-page'
 
 const TITLES: Record<AppMode, string> = {
-  screenshot: '截屏解题助手',
+  screenshot: '截屏解题',
   conversation: '对话提示'
 }
 
