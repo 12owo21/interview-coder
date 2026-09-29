@@ -4,13 +4,14 @@ import { settings, getModeProfile } from './settings'
 import type { ApiProfile, AppMode } from '../shared/api-profile'
 import { buildRequestHeaders } from '../shared/request-headers'
 import { createThinkingOffFetch } from './thinking'
+import { getKnowledgePrompt } from './knowledge'
 
 // The system prompts are fully managed by the renderer (prompt scenes in the
 // settings store, one active scene per mode) and synced here via
-// updateAppSettings on app startup
+// updateAppSettings on app startup. The mode's 资料库 material goes first
 function getSystemPrompt(mode: AppMode, extra?: string) {
   const prompt = mode === 'screenshot' ? settings.customPrompt : settings.conversationPrompt
-  return [prompt, extra].filter(Boolean).join('\n\n') || undefined
+  return [getKnowledgePrompt(mode), prompt, extra].filter(Boolean).join('\n\n') || undefined
 }
 
 /** Tell the user once that the active model ignores the profile's 「关闭思考」 */

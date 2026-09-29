@@ -5,6 +5,7 @@ import {
   Bot,
   Camera,
   Keyboard,
+  LibraryBig,
   MessagesSquare,
   Mic,
   Palette,
@@ -21,8 +22,9 @@ import { AppearanceSection } from './sections/AppearanceSection'
 import { ShortcutsSection } from './sections/ShortcutsSection'
 import { ScreenshotSection } from './sections/ScreenshotSection'
 import { ConversationSection } from './sections/ConversationSection'
+import { KnowledgeSection } from './sections/KnowledgeSection'
 
-type Tab = 'ai' | 'voice' | 'appearance' | 'shortcuts' | 'screenshot' | 'conversation'
+type Tab = 'ai' | 'knowledge' | 'voice' | 'appearance' | 'shortcuts' | 'screenshot' | 'conversation'
 
 /**
  * Grouped by what a setting affects: the shared ones first, then one group per
@@ -33,6 +35,7 @@ const NAV: { heading: string; items: { tab: Tab; label: string; Icon: LucideIcon
     heading: '通用',
     items: [
       { tab: 'ai', label: 'AI 模型', Icon: Bot },
+      { tab: 'knowledge', label: '资料库', Icon: LibraryBig },
       { tab: 'voice', label: '语音', Icon: Mic },
       { tab: 'appearance', label: '界面与隐私', Icon: Palette },
       { tab: 'shortcuts', label: '快捷键', Icon: Keyboard }
@@ -97,12 +100,19 @@ export default function SettingsPage() {
 
   const sections: Record<Tab, ReactNode> = {
     ai: <AiModelsSection />,
+    knowledge: <KnowledgeSection />,
     voice: <VoiceSection />,
     appearance: <AppearanceSection />,
     shortcuts: <ShortcutsSection />,
-    screenshot: <ScreenshotSection onEditProfile={editProfile} />,
+    screenshot: (
+      <ScreenshotSection onEditProfile={editProfile} onOpenKnowledge={() => openTab('knowledge')} />
+    ),
     conversation: (
-      <ConversationSection onEditProfile={editProfile} onOpenVoice={() => openTab('voice')} />
+      <ConversationSection
+        onEditProfile={editProfile}
+        onOpenVoice={() => openTab('voice')}
+        onOpenKnowledge={() => openTab('knowledge')}
+      />
     )
   }
 

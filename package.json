@@ -60,6 +60,7 @@
     "electron-updater": "^6.3.9",
     "katex": "^0.16.47",
     "lucide-react": "^0.540.0",
+    "mammoth": "^1.13.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",
@@ -71,6 +72,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "tw-animate-css": "^1.3.7",
+    "unpdf": "^1.8.1",
     "ws": "^8.20.0",
     "zod": "^4.0.17",
     "zustand": "^5.0.8"

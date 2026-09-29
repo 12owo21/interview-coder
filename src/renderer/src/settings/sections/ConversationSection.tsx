@@ -8,6 +8,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useSettingsStore, type HintMode } from '@/lib/store/settings'
+import { KnowledgeField } from '../KnowledgeField'
 import { ModeProfileSelect } from '../ModeProfileSelect'
 import { SceneEditor } from '../SceneEditor'
 import { Advanced, Field, SettingsCard } from '../components'
@@ -24,10 +25,12 @@ const MIN_CHARS_OPTIONS = [2, 4, 6, 8]
 
 export function ConversationSection({
   onEditProfile,
-  onOpenVoice
+  onOpenVoice,
+  onOpenKnowledge
 }: {
   onEditProfile: (id: string) => void
   onOpenVoice: () => void
+  onOpenKnowledge: () => void
 }) {
   const {
     dashscopeApiKey,
@@ -57,6 +60,7 @@ export function ConversationSection({
         <div className="space-y-4">
           <ModeProfileSelect mode="conversation" onEdit={onEditProfile} />
           <SceneEditor mode="conversation" />
+          <KnowledgeField mode="conversation" onOpen={onOpenKnowledge} />
         </div>
       </SettingsCard>
 

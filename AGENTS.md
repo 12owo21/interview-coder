@@ -11,6 +11,7 @@ Key capabilities:
 - Multi-screenshot conversation continuity (append screenshots to existing context)
 - Follow-up questions within the same conversation
 - Real-time speech transcription (DashScope Fun-ASR) — transcribed text is attached to screenshots when sent to AI
+- 资料库: the user's own material (resume, prepared Q&A, notes; imported from PDF / Word / Markdown / TXT or pasted) goes in front of each mode's system prompt
 - 对话模式 (conversation mode): a second page for voice interviews — the other side's sentences on the left, short AI hints on the right, no screenshots; hints come automatically when a sentence ends or on a shortcut
 - Configurable AI provider (OpenAI, SiliconFlow, OpenRouter, or any OpenAI-compatible API)
 
@@ -39,6 +40,8 @@ src/
 │   ├── conversation.ts      # 对话模式: utterances, hint cards, automatic / manual hint triggering
 │   ├── stream.ts            # consumeStream() shared by both modes, API error messages, image-refusal detection
 │   ├── ai.ts                # Vercel AI SDK integration, one streaming function per request kind, each with its mode's profile
+│   ├── knowledge.ts         # 资料库: material on disk under userData, IPC, the system prompt block per mode
+│   ├── knowledge-parse.ts   # Text out of an imported PDF (unpdf) / .docx (mammoth) / Markdown / TXT (UTF-8, UTF-16, GBK)
 │   ├── thinking.ts          # 「关闭思考」: per-platform request-body fields + retry without them when refused
 │   ├── model-list.ts        # `listModels` IPC: a platform's `/models` list (+ SiliconFlow vision flags scraped from its public model square)
 │   ├── settings.ts          # App settings object + IPC handlers
@@ -58,6 +61,7 @@ src/
 │   ├── request-headers.ts   # Parse the custom request headers text, merge it over the Bearer key
 │   ├── capture-region.ts    # CaptureRegion type + fractions → pixels, for main's crop and the picker's readout
 │   ├── api-profile.ts       # ApiProfile + AppMode types
+│   ├── knowledge.ts         # KnowledgeDoc type, the suggested per-mode limit, estimateTokens()
 │   └── conversation.ts      # 对话模式 types (Utterance, HintCard, HintMode) + countMeaningfulChars()
 └── renderer/
     ├── index.html            # SPA entry
@@ -79,11 +83,12 @@ src/
         │   ├── ConversationStatusBar.tsx # Listening, 自动/手动, hint / stop buttons with shortcuts
         │   └── listening.ts  # Start / stop recognition (`purpose: 'conversation'`), toggle hint mode
         ├── settings/         # Settings page: left nav, one group at a time (`?tab=`)
-        │   ├── index.tsx     # Shell: nav (通用: AI 模型 / 语音 / 界面与隐私 / 快捷键; 模式: 截图模式 / 对话模式)
+        │   ├── index.tsx     # Shell: nav (通用: AI 模型 / 资料库 / 语音 / 界面与隐私 / 快捷键; 模式: 截图模式 / 对话模式)
         │   ├── sections/     # One component per nav entry
         │   ├── components.tsx      # SettingsCard, Field, Advanced (folded), SecretInput
         │   ├── SceneEditor.tsx     # One mode's prompt scenes: pick, edit, add, delete, restore
         │   ├── ModeProfileSelect.tsx # Which saved profile a mode uses (截图模式 refuses text-only ones)
+        │   ├── KnowledgeField.tsx  # A mode's share of the 资料库, linking to it
         │   ├── ApiProfiles.tsx     # Saved AI profiles: open, add, rename, remove, assign to modes (「用于」)
         │   ├── ModelField.tsx      # Model row: picker + mismatch warning with one-click fix
         │   ├── ApiHeadersField.tsx # Custom request headers textarea + ignored-line warning
@@ -116,6 +121,7 @@ src/
         │   ├── providers.ts  # Known platforms + each one's spelling of the same model
         │   ├── platform-models.ts # usePlatformModels(): cached `/models` list per URL + key
         │   ├── model-switch.ts    # changeApiBaseURL(): switch URL, toast the linked model change
+        │   ├── knowledge.ts       # useKnowledgeDocs() (the list from main), per-mode usage, 字 / token formatting
         │   ├── api-profiles.ts    # ApiProfile type + factory (one saved URL / key / model set)
         │   ├── use-elapsed.ts     # Header timer: local tick while loading, main's measured value after
         │   ├── utils/
@@ -191,6 +197,7 @@ src/
 - `start-transcription` / `stop-transcription` — speech transcription lifecycle; start takes `{ purpose, maxSentenceSilence }`
 - `conversation:get-snapshot` / `conversation:request-hint` / `conversation:stop-hints` / `conversation:clear` — 对话模式
 - `get-transcription-text` / `clear-transcription-text` — read/clear accumulated text
+- `knowledge:list` / `knowledge:get-text` / `knowledge:pick-files` / `knowledge:import-files` / `knowledge:create` / `knowledge:update` / `knowledge:reimport` / `knowledge:remove` — 资料库; imports and reimports return their failures as values, not rejections
 
 **Main → Renderer (send):**
 - `sync-app-state` — push state changes (e.g., mouse ignore toggle) to both the main and the toolbar window
@@ -298,6 +305,16 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - Several cards may stream at once. A card restarted by a newer request bumps its `generations` entry, so the stream it replaced never writes to it again
 - Each request sends the recent sentences as context (20 sentences / 1500 chars) plus the ones the hint is for; earlier hints are not sent back, so requests stay small
 - The preset prompts ask for 「（无需回应）」 when nothing needs an answer; the page dims those cards
+
+### 资料库 (Knowledge)
+
+Material the user wants the AI to draw on — a resume, prepared Q&A, notes — kept by main (`src/main/knowledge.ts`), not by the renderer store:
+- Stored under `userData/knowledge/`: `index.json` for the list, `<id>.txt` per text, both cached in memory once read. Not in localStorage: a few documents would outgrow it, and settings are synced to main whole on every change
+- Only the extracted text is kept, and the user can edit it (a PDF's layout often needs it); `sourcePath` is remembered for 「重新导入」, which overwrites those edits
+- Each doc lists the modes it is sent with (`modes`, empty = kept but unused). `getKnowledgePrompt(mode)` wraps them in `<资料 name="…">` blocks with the rules for using them, and `getSystemPrompt()` in `ai.ts` puts that **before** the scene prompt: a prefix stable across requests and scene switches is what platforms cache, and the scene's format rules end up closer to the question
+- Everything is sent in full with every request. `KNOWLEDGE_CHAR_LIMIT` (30,000 chars per mode) only drives a warning in the settings page; a request that still overflows the model is explained by `extractErrorMessage()`
+- Parsers (`unpdf`, `mammoth`) are loaded with `import()` on first use. PDF text is passed through NFKC for the Kangxi radical look-alikes (「⼩」 for 「小」) some fonts map to
+- The settings section is also a drop zone (`webUtils.getPathForFile`, exposed as `getPathForFile`); while it is mounted, a file dropped elsewhere in the window is swallowed instead of replacing the app
 
 ### Stream Abort Pattern
 

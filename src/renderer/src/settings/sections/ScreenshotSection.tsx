@@ -10,11 +10,18 @@ import {
 } from '@/components/ui/select'
 import { useSettingsStore, type CodeNamingMode, type ScreenshotDisplay } from '@/lib/store/settings'
 import { CaptureTargetFields } from '../CaptureTargetFields'
+import { KnowledgeField } from '../KnowledgeField'
 import { ModeProfileSelect } from '../ModeProfileSelect'
 import { SceneEditor } from '../SceneEditor'
 import { Field, SettingsCard } from '../components'
 
-export function ScreenshotSection({ onEditProfile }: { onEditProfile: (id: string) => void }) {
+export function ScreenshotSection({
+  onEditProfile,
+  onOpenKnowledge
+}: {
+  onEditProfile: (id: string) => void
+  onOpenKnowledge: () => void
+}) {
   const {
     screenshotDisplay,
     screenshotAutoSave,
@@ -36,6 +43,7 @@ export function ScreenshotSection({ onEditProfile }: { onEditProfile: (id: strin
         <div className="space-y-4">
           <ModeProfileSelect mode="screenshot" onEdit={onEditProfile} />
           <SceneEditor mode="screenshot" />
+          <KnowledgeField mode="screenshot" onOpen={onOpenKnowledge} />
         </div>
       </SettingsCard>
 

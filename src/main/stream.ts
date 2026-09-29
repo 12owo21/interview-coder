@@ -42,9 +42,16 @@ type ApiError = Error & {
 }
 
 /**
- * Extract meaningful error message from API errors
+ * Extract meaningful error message from API errors. A request longer than the
+ * model takes is explained, since 资料库 material makes that easy to reach.
  */
 export function extractErrorMessage(error: unknown): string {
+  const message = platformErrorMessage(error)
+  if (!isContextOverflow(error)) return message
+  return `请求内容超出了模型能处理的长度，请到「设置 → 资料库」少用一些资料，或换一个上下文更长的模型（${message}）`
+}
+
+function platformErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) {
     return String(error) || '未知错误'
   }
@@ -89,4 +96,20 @@ export function isImageInputRefused(error: unknown): boolean {
   const { statusCode, responseBody, message } = error as ApiError
   if (statusCode !== undefined && statusCode !== 400 && statusCode !== 422) return false
   return IMAGE_REFUSAL.test(`${responseBody ?? ''}\n${message}`)
+}
+
+/**
+ * How platforms word "the request is longer than the model takes": OpenAI and
+ * vLLM (`maximum context length`, `context_length_exceeded`), DashScope
+ * (`Range of input length should be`), others (`prompt is too long`, `too many
+ * tokens`)
+ */
+const CONTEXT_OVERFLOW =
+  /context[_ ]length|maximum context|context window|prompt is too long|too many tokens|input length|(?:超出|超过)[^，。]{0,8}(?:上下文|长度)/i
+
+function isContextOverflow(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const { statusCode, responseBody, message } = error as ApiError
+  if (statusCode !== undefined && statusCode !== 400 && statusCode !== 413) return false
+  return CONTEXT_OVERFLOW.test(`${responseBody ?? ''}\n${message}`)
 }

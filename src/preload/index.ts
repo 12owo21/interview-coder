@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { AppSettings } from '../main/settings'
 import type { AppState } from '../main/state'
@@ -8,6 +8,7 @@ import type { RegionPickerData } from '../main/region-picker'
 import type { CaptureRegion, RegionRect } from '../shared/capture-region'
 import type { TranscriptionOptions } from '../main/transcription'
 import type { ConversationSnapshot, HintCard, Utterance } from '../shared/conversation'
+import type { KnowledgeDoc, KnowledgeImportResult, KnowledgePatch } from '../shared/knowledge'
 
 // Custom APIs for renderer
 const api = {
@@ -314,6 +315,24 @@ const api = {
       ipcRenderer.removeAllListeners(channel)
     }
   },
+
+  // 资料库: main keeps the material on disk and puts it into each mode's system prompt
+  listKnowledge: () => ipcRenderer.invoke('knowledge:list') as Promise<KnowledgeDoc[]>,
+  getKnowledgeText: (id: string) => ipcRenderer.invoke('knowledge:get-text', id) as Promise<string>,
+  // Open a file dialog and import what was picked; null if cancelled
+  pickKnowledgeFiles: () =>
+    ipcRenderer.invoke('knowledge:pick-files') as Promise<KnowledgeImportResult | null>,
+  importKnowledgeFiles: (paths: string[]) =>
+    ipcRenderer.invoke('knowledge:import-files', paths) as Promise<KnowledgeImportResult>,
+  createKnowledge: (name: string, text: string) =>
+    ipcRenderer.invoke('knowledge:create', name, text) as Promise<KnowledgeDoc>,
+  updateKnowledge: (id: string, patch: KnowledgePatch) =>
+    ipcRenderer.invoke('knowledge:update', id, patch) as Promise<KnowledgeDoc | null>,
+  reimportKnowledge: (id: string) =>
+    ipcRenderer.invoke('knowledge:reimport', id) as Promise<{ doc?: KnowledgeDoc; error?: string }>,
+  removeKnowledge: (id: string) => ipcRenderer.invoke('knowledge:remove', id) as Promise<void>,
+  // Where a dropped file lives on disk (`File.path` is gone since Electron 32)
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 
   // Transcription
   startTranscription: (apiKey: string, options?: TranscriptionOptions) =>
