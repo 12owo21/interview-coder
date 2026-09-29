@@ -38,9 +38,9 @@ export default function CoderPage() {
   useEffect(() => {
     window.api.onSwitchApiProfile((direction) => {
       const store = useSettingsStore.getState()
-      const profile = store.cycleProfile(direction)
+      const profile = store.cycleProfile('screenshot', direction)
       if (!profile) {
-        toast('只有一个配置，无法切换')
+        toast('没有其他能识图的配置可以切换')
         return
       }
       toast(`已切换到「${profile.name}」`, {
@@ -55,7 +55,7 @@ export default function CoderPage() {
 
   useEffect(() => {
     window.api.onCycleScene(() => {
-      const name = useSettingsStore.getState().cycleScene()
+      const name = useSettingsStore.getState().cycleScene('screenshot')
       if (!name) return
       // An answer already streaming keeps the prompt it started with
       toast(`已切换到「${name}」`, { description: '下次提问生效', duration: 3000 })

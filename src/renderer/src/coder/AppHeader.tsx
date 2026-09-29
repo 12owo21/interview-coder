@@ -11,8 +11,10 @@ import { useElapsed } from '@/lib/use-elapsed'
 export function AppHeader() {
   const navigate = useNavigate()
   const { ignoreMouse } = useAppStore()
-  const model = useSettingsStore((state) => state.model)
-  // A shortcut or a toolbar hover can switch it unnoticed, so it stays in view
+  // A shortcut or a toolbar hover can switch either unnoticed, so both stay in view
+  const model = useSettingsStore(
+    (state) => state.apiProfiles.find((p) => p.id === state.screenshotProfileId)?.model
+  )
   const sceneName = useSettingsStore(
     (state) => state.scenes.find((s) => s.id === state.activeSceneId)?.name
   )

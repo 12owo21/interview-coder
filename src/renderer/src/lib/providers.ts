@@ -129,6 +129,14 @@ function findFamily(model: string) {
   )
 }
 
+/**
+ * Whether `model` takes images, as far as the preset table knows: every preset
+ * does, anything else is unknown until the platform's model list says.
+ */
+export function knownVision(model: string): true | undefined {
+  return model && findFamily(model) ? true : undefined
+}
+
 /** Whether `model` is exactly one of the platform's known IDs (aliases included) */
 export function isProviderModel(provider: Provider, model: string): boolean {
   return !!findFamily(model)?.[provider.id]?.includes(model)
@@ -233,16 +241,19 @@ export interface ModelDiagnosis {
 export function diagnoseModel(
   model: string,
   baseURL: string,
-  platformModels?: PlatformModel[]
+  platformModels?: PlatformModel[],
+  /** 截图模式 uses this profile, so a model without image input is a problem */
+  requireVision = true
 ): ModelDiagnosis | null {
-  const diagnosis = diagnose(model, baseURL, platformModels)
+  const diagnosis = diagnose(model, baseURL, platformModels, requireVision)
   return diagnosis && { ...diagnosis, message: cjkSpacing(diagnosis.message) }
 }
 
 function diagnose(
   model: string,
   baseURL: string,
-  platformModels?: PlatformModel[]
+  platformModels: PlatformModel[] | undefined,
+  requireVision: boolean
 ): ModelDiagnosis | null {
   const provider = findProvider(baseURL)
   const platformName = provider?.name ?? '当前平台'
@@ -258,8 +269,8 @@ function diagnose(
 
   const listed = platformModels?.find((m) => m.id === model)
   if (listed) {
-    return listed.vision === false
-      ? { message: '该模型不支持图片输入，无法识别截图，请换一个视觉模型' }
+    return listed.vision === false && requireVision
+      ? { message: '截图模式正在使用这个配置，但该模型不支持图片输入，无法识别截图' }
       : null
   }
 
@@ -287,7 +298,7 @@ function diagnose(
     }
     const notFound = `${platformName}的模型列表里没有「${model}」，可能应写作${guess.id}`
     // Offering a replacement that can't read screenshots would only trade one warning for another
-    return guess.vision === false
+    return guess.vision === false && requireVision
       ? { message: `${notFound}，但它不支持图片输入，无法识别截图` }
       : { message: notFound, fix: { label: '替换', model: guess.id } }
   }

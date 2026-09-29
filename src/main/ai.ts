@@ -1,13 +1,16 @@
 import { streamText, type ModelMessage } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
-import { settings, AppSettings } from './settings'
+import { settings, getModeProfile } from './settings'
+import type { ApiProfile, AppMode } from '../shared/api-profile'
 import { buildRequestHeaders } from '../shared/request-headers'
 import { createThinkingOffFetch } from './thinking'
 
-// The system prompt is fully managed by the renderer (prompt scenes in the
-// settings store) and synced here via updateAppSettings on app startup
-function getSystemPrompt(extra?: string) {
-  return [settings.customPrompt, extra].filter(Boolean).join('\n\n') || undefined
+// The system prompts are fully managed by the renderer (prompt scenes in the
+// settings store, one active scene per mode) and synced here via
+// updateAppSettings on app startup
+function getSystemPrompt(mode: AppMode, extra?: string) {
+  const prompt = mode === 'screenshot' ? settings.customPrompt : settings.conversationPrompt
+  return [prompt, extra].filter(Boolean).join('\n\n') || undefined
 }
 
 /** Tell the user once that the active model ignores the profile's 「关闭思考」 */
@@ -17,31 +20,37 @@ function reportThinkingRefused(model: string) {
   mainWindow.webContents.send('thinking-unsupported', model)
 }
 
-function createProvider() {
+function createProvider(profile: ApiProfile) {
   return createOpenAI({
-    baseURL: settings.apiBaseURL,
-    apiKey: settings.apiKey,
-    headers: buildRequestHeaders(settings.apiKey, settings.apiHeaders),
+    baseURL: profile.apiBaseURL,
+    apiKey: profile.apiKey,
+    headers: buildRequestHeaders(profile.apiKey, profile.apiHeaders),
     // Only when asked for: a plain request is the one every platform accepts
-    ...(settings.disableThinking
-      ? { fetch: createThinkingOffFetch(settings.apiBaseURL, reportThinkingRefused) }
+    ...(profile.disableThinking
+      ? { fetch: createThinkingOffFetch(profile.apiBaseURL, reportThinkingRefused) }
       : {})
   })
 }
 
-function getModel(_settings: AppSettings) {
-  const fallbackModel = settings.apiBaseURL.includes('siliconflow')
+function getModel(profile: ApiProfile) {
+  const fallbackModel = profile.apiBaseURL.includes('siliconflow')
     ? 'Qwen/Qwen3-VL-32B-Instruct'
     : 'gpt-5-mini'
-  return _settings.model || fallbackModel
+  return profile.model || fallbackModel
 }
 
-export function getSolutionStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
-  const openai = createProvider()
+function streamWith(
+  mode: AppMode,
+  messages: ModelMessage[],
+  abortSignal: AbortSignal | undefined,
+  extraSystem?: string
+) {
+  const profile = getModeProfile(mode)
+  const openai = createProvider(profile)
 
   const { textStream } = streamText({
-    model: openai.chat(getModel(settings)),
-    system: getSystemPrompt(),
+    model: openai.chat(getModel(profile)),
+    system: getSystemPrompt(mode, extraSystem),
     messages,
     abortSignal,
     onError: (err) => {
@@ -51,13 +60,15 @@ export function getSolutionStream(messages: ModelMessage[], abortSignal?: AbortS
   return textStream
 }
 
+export function getSolutionStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
+  return streamWith('screenshot', messages, abortSignal)
+}
+
 export function getFollowUpStream(
   messages: ModelMessage[],
   userQuestion: string,
   abortSignal?: AbortSignal
 ) {
-  const openai = createProvider()
-
   // Add the user's follow-up question to the conversation
   const updatedMessages: ModelMessage[] = [
     ...messages,
@@ -71,32 +82,14 @@ export function getFollowUpStream(
       ]
     }
   ]
-
-  const { textStream } = streamText({
-    model: openai.chat(getModel(settings)),
-    system: getSystemPrompt(),
-    messages: updatedMessages,
-    abortSignal,
-    onError: (err) => {
-      throw err.error ?? err
-    }
-  })
-  return textStream
+  return streamWith('screenshot', updatedMessages, abortSignal)
 }
 
 export function getGeneralStream(messages: ModelMessage[], abortSignal?: AbortSignal) {
-  const openai = createProvider()
-
-  const { textStream } = streamText({
-    model: openai.chat(getModel(settings)),
-    system: getSystemPrompt(
-      '注意：如果有多张截图，请结合所有截图内容进行完整分析，不要遗漏任何部分。'
-    ),
+  return streamWith(
+    'screenshot',
     messages,
     abortSignal,
-    onError: (err) => {
-      throw err.error ?? err
-    }
-  })
-  return textStream
+    '注意：如果有多张截图，请结合所有截图内容进行完整分析，不要遗漏任何部分。'
+  )
 }

@@ -110,6 +110,14 @@ const api = {
     ipcRenderer.removeAllListeners('cycle-scene')
   },
 
+  // A screenshot was refused because this profile's model takes no images
+  onVisionUnsupported: (callback: (profileId: string) => void) => {
+    ipcRenderer.on('vision-unsupported', (_event, profileId: string) => callback(profileId))
+  },
+  removeVisionUnsupportedListener: () => {
+    ipcRenderer.removeAllListeners('vision-unsupported')
+  },
+
   // The active model refused 「关闭思考」, so its requests now go without it
   onThinkingUnsupported: (callback: (model: string) => void) => {
     ipcRenderer.on('thinking-unsupported', (_event, model: string) => callback(model))

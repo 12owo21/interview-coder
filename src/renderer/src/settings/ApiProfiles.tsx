@@ -19,13 +19,21 @@ const UNNAMED = '未命名配置'
 
 /**
  * The saved AI endpoints as a row of chips, the same pattern as 使用场景: click
- * one to make it active, and the panel below (`children`: URL, key, headers,
- * model, thinking switch) edits that one. Each entry holds its own set, so switching does not
- * disturb the others.
+ * one to open it, and the panel below (`children`: URL, key, headers, model,
+ * thinking switch) edits that one. Which profile a mode sends its requests with
+ * is picked separately (「用于」 below, or the mode's own settings group); the
+ * chips carry a tag for each mode using them.
  */
 export function ApiProfiles({ children }: { children: ReactNode }) {
-  const { apiProfiles, activeProfileId, setActiveProfile, addProfile, removeProfile } =
-    useSettingsStore()
+  const {
+    apiProfiles,
+    activeProfileId,
+    screenshotProfileId,
+    conversationProfileId,
+    setActiveProfile,
+    addProfile,
+    removeProfile
+  } = useSettingsStore()
   const [addOpen, setAddOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [copyActive, setCopyActive] = useState(false)
@@ -33,6 +41,15 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
 
   const active = apiProfiles.find((p) => p.id === activeProfileId)
   const activeName = active?.name.trim() || UNNAMED
+  // Removing a profile in use hands its modes to the neighbour, like removeProfile does
+  const activeIndex = apiProfiles.findIndex((p) => p.id === activeProfileId)
+  const successor = apiProfiles.filter((p) => p.id !== activeProfileId)[
+    Math.min(activeIndex, apiProfiles.length - 2)
+  ]
+  const usedBy = [
+    screenshotProfileId === activeProfileId && '截图模式',
+    conversationProfileId === activeProfileId && '对话模式'
+  ].filter(Boolean)
 
   const handleAdd = () => {
     const trimmed = newName.trim()
@@ -57,6 +74,8 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
             onClick={() => setActiveProfile(profile.id)}
           >
             {profile.name.trim() || UNNAMED}
+            {profile.id === screenshotProfileId && <ModeTag>截图</ModeTag>}
+            {profile.id === conversationProfileId && <ModeTag>对话</ModeTag>}
           </button>
         ))}
         <button
@@ -70,6 +89,8 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
 
       <div className="mt-3 space-y-4 rounded-md border border-gray-400/60 bg-white/25 p-4">
         <ProfileNameField />
+
+        <ProfileUsageField />
 
         {children}
 
@@ -91,7 +112,8 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
           <DialogHeader>
             <DialogTitle>新增配置</DialogTitle>
             <DialogDescription>
-              每个配置单独保存 API 地址、密钥、请求头、模型和思考开关，之后可点选或用快捷键切换
+              每个配置单独保存 API
+              地址、密钥、请求头、模型和思考开关；截图模式和对话模式各选一个来用，也可用快捷键切换
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -128,6 +150,9 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
             <DialogTitle>删除配置</DialogTitle>
             <DialogDescription>
               确定删除配置「{activeName}」吗？其中的 API Key 等设置将一并删除，且无法恢复。
+              {usedBy.length > 0 &&
+                successor &&
+                `${usedBy.join('和')}正在使用它，删除后改用「${successor.name.trim() || UNNAMED}」。`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -147,6 +172,60 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+function ModeTag({ children }: { children: ReactNode }) {
+  return <span className="ml-1.5 rounded bg-black/15 px-1 text-[10px] leading-4">{children}</span>
+}
+
+/** Which modes send their requests with the profile being edited */
+function ProfileUsageField() {
+  const { activeProfileId, screenshotProfileId, conversationProfileId, setModeProfile } =
+    useSettingsStore()
+  const profile = useSettingsStore((s) => s.apiProfiles.find((p) => p.id === activeProfileId))
+  if (!profile) return null
+
+  const modes = [
+    { mode: 'screenshot' as const, label: '截图模式', inUse: screenshotProfileId === profile.id },
+    {
+      mode: 'conversation' as const,
+      label: '对话模式',
+      inUse: conversationProfileId === profile.id
+    }
+  ]
+  // A mode always has a profile, so the one in use is switched off by picking another
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <label className="text-sm font-medium">
+        用于
+        <span className="ml-2 text-xs font-light">
+          点击让该模式改用这个配置；截图模式需要能识图的模型，对话模式适合关闭思考的快模型
+        </span>
+      </label>
+      <div className="flex w-60 shrink-0 gap-2">
+        {modes.map(({ mode, label, inUse }) => {
+          const noImages = mode === 'screenshot' && profile.vision === false
+          return (
+            <button
+              key={mode}
+              disabled={inUse || noImages}
+              className={cn(
+                'flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors',
+                inUse
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : noImages
+                    ? 'bg-white/50 border-gray-300 text-gray-400'
+                    : 'bg-white border-gray-300 hover:border-blue-400 cursor-pointer'
+              )}
+              onClick={() => setModeProfile(mode, profile.id)}
+            >
+              {inUse ? `${label}使用中` : noImages ? '不支持识图' : `用于${label}`}
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

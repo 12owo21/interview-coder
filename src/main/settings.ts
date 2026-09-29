@@ -1,5 +1,7 @@
 import { app, dialog, ipcMain } from 'electron'
 import type { CaptureRegion } from '../shared/capture-region'
+import type { ApiProfile, AppMode } from '../shared/api-profile'
+import type { HintMode } from '../shared/conversation'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
 
 ipcMain.handle('getAppVersion', () => {
@@ -72,7 +74,20 @@ export const settings = {
    * user's "off".
    */
   disableThinking: false,
+  /** Every saved AI profile, synced from the renderer; each mode picks one by id */
+  apiProfiles: [] as ApiProfile[],
+  screenshotProfileId: '',
+  conversationProfileId: '',
+  /** 截图模式's system prompt, from the renderer's active scene */
   customPrompt: '',
+  /** 对话模式's system prompt, from the renderer's active scene */
+  conversationPrompt: '',
+  /** 对话模式: hint on every finished sentence (`auto`) or only on the shortcut */
+  conversationHintMode: 'auto' as HintMode,
+  /** 对话模式: silence (ms) that ends a sentence in the recogniser */
+  conversationSilenceMs: 800,
+  /** 对话模式: a finished sentence shorter than this triggers no automatic hint */
+  conversationMinChars: 4,
   /** Kept in sync with the renderer so the overlay toolbar can match the main window */
   opacity: 0.8,
   /**
@@ -103,3 +118,22 @@ export const settings = {
 }
 
 export type AppSettings = typeof settings
+
+/**
+ * The profile a mode sends its requests with. Until the renderer has synced
+ * its list (or with only `.env` configured) the flat fields are all there is.
+ */
+export function getModeProfile(mode: AppMode): ApiProfile {
+  const id = mode === 'screenshot' ? settings.screenshotProfileId : settings.conversationProfileId
+  const profile = settings.apiProfiles.find((p) => p.id === id)
+  if (profile) return profile
+  return {
+    id: '',
+    name: '',
+    apiBaseURL: settings.apiBaseURL,
+    apiKey: settings.apiKey,
+    apiHeaders: settings.apiHeaders,
+    model: settings.model,
+    disableThinking: settings.disableThinking
+  }
+}

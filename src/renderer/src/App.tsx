@@ -58,6 +58,18 @@ export default function App() {
     return () => window.api.removeCaptureRegionPickedListener()
   }, [])
 
+  // A screenshot was refused for want of image input: remember that about the
+  // profile, so 截图模式 no longer offers it. Only an unknown flag is overwritten;
+  // the platform's own model list is the better witness
+  useEffect(() => {
+    window.api.onVisionUnsupported((profileId) => {
+      const store = useSettingsStore.getState()
+      const profile = store.apiProfiles.find((p) => p.id === profileId)
+      if (profile && profile.vision === undefined) store.updateProfile(profileId, { vision: false })
+    })
+    return () => window.api.removeVisionUnsupportedListener()
+  }, [])
+
   useEffect(() => {
     console.log('App initShortcuts:', shortcuts) // DEBUG: 检查新键
     window.api.initShortcuts(shortcuts)

@@ -35,7 +35,8 @@ src/
 │   ├── main-window.ts       # BrowserWindow creation (frameless, transparent, always-on-top)
 │   ├── toolbar-window.ts    # Overlay toolbar window: bounds/visibility/opacity glued to main window
 │   ├── shortcuts.ts         # Global shortcuts registration + AI streaming orchestration (largest file)
-│   ├── ai.ts                # Vercel AI SDK integration, 3 streaming functions
+│   ├── stream.ts            # consumeStream(), API error messages, image-refusal detection
+│   ├── ai.ts                # Vercel AI SDK integration, one streaming function per request kind, each with its mode's profile
 │   ├── thinking.ts          # 「关闭思考」: per-platform request-body fields + retry without them when refused
 │   ├── model-list.ts        # `listModels` IPC: a platform's `/models` list (+ SiliconFlow vision flags scraped from its public model square)
 │   ├── settings.ts          # App settings object + IPC handlers
@@ -53,7 +54,9 @@ src/
 │   └── index.d.ts           # Type declarations for window.electron and window.api
 ├── shared/                  # Pure TS used by both main and renderer (no Electron / DOM / Node imports)
 │   ├── request-headers.ts   # Parse the custom request headers text, merge it over the Bearer key
-│   └── capture-region.ts    # CaptureRegion type + fractions → pixels, for main's crop and the picker's readout
+│   ├── capture-region.ts    # CaptureRegion type + fractions → pixels, for main's crop and the picker's readout
+│   ├── api-profile.ts       # ApiProfile + AppMode types
+│   └── conversation.ts      # 对话模式 types (Utterance, HintCard, HintMode) + countMeaningfulChars()
 └── renderer/
     ├── index.html            # SPA entry
     └── src/
@@ -67,9 +70,13 @@ src/
         │   ├── TranscriptionBar.tsx # Absolute-positioned real-time transcription overlay
         │   ├── OverlayToolbar.tsx  # Contents of the toolbar window (route `/toolbar`)
         │   └── PrerequisitesChecker.tsx  # Modal for API key setup
-        ├── settings/         # Settings page
-        │   ├── index.tsx     # AI config, coding, appearance, shortcuts, privacy
-        │   ├── ApiProfiles.tsx     # Saved AI profiles: switch, add, rename, remove
+        ├── settings/         # Settings page: left nav, one group at a time (`?tab=`)
+        │   ├── index.tsx     # Shell: nav (通用: AI 模型 / 语音 / 界面与隐私 / 快捷键; 模式: 截图模式 / 对话模式)
+        │   ├── sections/     # One component per nav entry
+        │   ├── components.tsx      # SettingsCard, Field, Advanced (folded), SecretInput
+        │   ├── SceneEditor.tsx     # One mode's prompt scenes: pick, edit, add, delete, restore
+        │   ├── ModeProfileSelect.tsx # Which saved profile a mode uses (截图模式 refuses text-only ones)
+        │   ├── ApiProfiles.tsx     # Saved AI profiles: open, add, rename, remove, assign to modes (「用于」)
         │   ├── ModelField.tsx      # Model row: picker + mismatch warning with one-click fix
         │   ├── ApiHeadersField.tsx # Custom request headers textarea + ignored-line warning
         │   ├── CaptureTargetFields.tsx # Which screen to capture (cursor / fixed) + the optional capture region
@@ -180,8 +187,9 @@ src/
 - `solution-clear` / `solution-chunk` / `solution-complete` / `solution-stopped` / `solution-error` — AI streaming lifecycle
 - `ai-loading-start` / `ai-loading-end` — loading state
 - `solution-duration` — how long the finished request took (ms), timed in main from the key press
-- `switch-api-profile` — step the active AI profile (`1` / `-1`); the list lives in the renderer store
+- `switch-api-profile` — step 截图模式's AI profile (`1` / `-1`); the list lives in the renderer store
 - `cycle-scene` — step to the next prompt scene; the renderer owns the list and syncs the new `customPrompt` back
+- `vision-unsupported` — a screenshot was refused for want of image input (profile id); the renderer marks the profile text-only if nothing better is known
 - `thinking-unsupported` — the active model refused 「关闭思考」 (model name); sent once per model per session, the request has already been resent without it
 - `capture-region-picked` — a new capture region, from whichever entry point started the pick
 - `scroll-page-up` / `scroll-page-down` — keyboard-driven scroll
@@ -193,7 +201,7 @@ src/
 
 | Store | File | Persisted | Key State |
 |-------|------|-----------|-----------|
-| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiProfiles`, `activeProfileId`, `hasConfiguredApi`, `apiBaseURL`, `apiKey`, `apiHeaders`, `model`, `disableThinking` (mirror of the active profile), `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes), `activeSceneId`, `customPrompt` (derived from active scene), `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `hideShortcutHints`, `screenshotDisplay`, `captureScreen`, `captureRegion`, `screenshotAutoSave`, `screenshotDir`, `codeAutoSave`, `codeSaveDir`, `codeFileBaseName`, `codeNamingMode`, `codeCopyToClipboard`, `dashscopeApiKey` |
+| `useSettingsStore` | `lib/store/settings.ts` | Yes (v8) | `apiProfiles`, `activeProfileId` (the one being edited), `screenshotProfileId`, `conversationProfileId`, `hasConfiguredApi`, `apiBaseURL`, `apiKey`, `apiHeaders`, `model`, `disableThinking` (mirror of the edited profile), `customModels`, `customModelsByBaseURL`, `modelByBaseURL`, `scenes` (prompt scenes, each with a `mode`), `activeSceneId` / `conversationSceneId`, `customPrompt` / `conversationPrompt` (derived from each mode's scene), `lastMode`, `conversationHintMode`, `conversationSilenceMs`, `conversationMinChars`, `conversationTranscriptHidden`, `opacity`, `resizable`, `showOverlayToolbar`, `toolbarHoverDelay`, `hideShortcutHints`, `screenshotDisplay`, `captureScreen`, `captureRegion`, `screenshotAutoSave`, `screenshotDir`, `codeAutoSave`, `codeSaveDir`, `codeFileBaseName`, `codeNamingMode`, `codeCopyToClipboard`, `dashscopeApiKey` |
 | `useShortcutsStore` | `lib/store/shortcuts.ts` | Yes (v5) | `shortcuts` (action → key mapping with categories); `merge` adds new default actions on every load, so a new shortcut needs no `version` bump |
 | `useSolutionStore` | `lib/store/solution.ts` | No | `isLoading`, `solutionChunks`, `screenshotData`, `errorMessage`, `durationMs` |
 | `useTranscriptionStore` | `lib/store/transcription.ts` | No | `isTranscribing`, `transcriptionText`, `errorMessage` |
@@ -242,13 +250,14 @@ Both windows are created with `resizable: false` — toggling Electron's native 
 - Provider: `@ai-sdk/openai` with custom `baseURL` (works with any OpenAI-compatible API)
 - Custom request headers (`apiHeaders`, one `Name: Value` per line) go on every AI request and on the `/models` fetch, through `buildRequestHeaders()` in `src/shared/request-headers.ts`. They override the Bearer key case-insensitively, so a gateway can replace `Authorization`
 - Model fallback: `Qwen/Qwen3-VL-32B-Instruct` for SiliconFlow, `gpt-5-mini` otherwise
-- AI profiles (`apiProfiles`): each holds its own URL / key / headers / model / thinking switch, and the active one is mirrored onto the flat `apiBaseURL` / `apiKey` / `apiHeaders` / `model` / `disableThinking` fields that main reads (`CREDENTIAL_KEYS`). The profile is authoritative (`reconcileApiProfiles()` restores the flat fields from it on load), so never write those with `updateSetting`: use `updateCredential()`, `changeApiBaseURL()` or `setModel()`, which keep the profile in step — otherwise the edit is lost on the next profile switch or restart
+- AI profiles (`apiProfiles`): each holds its own URL / key / headers / model / thinking switch / `vision` flag. Each mode sends its requests with its own (`screenshotProfileId` / `conversationProfileId`, picked in the mode's settings group or via 「用于」); main resolves it with `getModeProfile(mode)` in `settings.ts`. `activeProfileId` is only the profile open in the AI 模型 editor, mirrored onto the flat `apiBaseURL` / `apiKey` / `apiHeaders` / `model` / `disableThinking` fields the editor binds to (`CREDENTIAL_KEYS`). The profile is authoritative (`reconcileApiProfiles()` restores the flat fields from it on load), so never write those with `updateSetting`: use `updateCredential()`, `changeApiBaseURL()` or `setModel()`, which keep the profile in step — otherwise the edit is lost on the next profile switch or restart
+- Image input (`ApiProfile.vision`): only 截图模式 needs it. `true` for preset models (`knownVision()`), set from the platform's `/models` list by `ModelField`, `false` once a screenshot is refused for it (`isImageInputRefused()` in `stream.ts` → `vision-unsupported`); absent means unknown and is allowed. A model change resets it. The model picker lists every platform model and only tags text-only ones; 截图模式's profile picker and its `cycleProfile` skip known text-only profiles
 - The welcome dialog (`PrerequisitesChecker`) shows only until a key has ever been saved (`hasConfiguredApi`), so a request made with a blank profile key is reported by main as a `solution-error` instead
-- Model ↔ API Base URL linkage lives in the renderer (`lib/providers.ts`): each platform spells the same model differently (`deepseek-flash` vs `deepseek/deepseek-v4.1-flash`), so the picker lists the selected platform's spelling and `setApiBaseURL()` translates the model on switch (else restores the one last used with that URL, else the platform default). Change the API Base URL through `changeApiBaseURL()`, not `updateSetting`, so the model follows and the user gets an undo toast. Preset models must accept image input
-- System prompts are maintained in the renderer settings store (`PRESET_SCENE_PROMPTS` in `lib/store/settings.ts`) as "prompt scenes"; the active scene's prompt is synced to the main process as `customPrompt`
-- Preset scenes can be deleted too (at least one scene always remains). `merge` rebuilds the presets on every load so new ones reach existing users, so a deleted preset's id goes into `removedPresetSceneIds` and is skipped; 「恢复预设场景」 (`restorePresetScenes()`) brings them all back with default prompts
+- Model ↔ API Base URL linkage lives in the renderer (`lib/providers.ts`): each platform spells the same model differently (`deepseek-flash` vs `deepseek/deepseek-v4.1-flash`), so the picker lists the selected platform's spelling and `setApiBaseURL()` translates the model on switch (else restores the one last used with that URL, else the platform default). Change the API Base URL through `changeApiBaseURL()`, not `updateSetting`, so the model follows and the user gets an undo toast. Preset models must accept image input (`knownVision()` relies on it)
+- System prompts are maintained in the renderer settings store (`PRESET_SCENE_PROMPTS` in `lib/store/settings.ts`) as "prompt scenes". Each scene belongs to one mode (`mode`, absent = 截图模式) and each mode has its own active scene; their prompts are synced to main as `customPrompt` (截图模式) and `conversationPrompt` (对话模式)
+- Preset scenes can be deleted too (at least one scene per mode always remains). `merge` rebuilds the presets on every load so new ones reach existing users, so a deleted preset's id goes into `removedPresetSceneIds` and is skipped; 「恢复预设场景」 (`restorePresetScenes(mode)`) brings back that mode's presets with default prompts
 - The system prompt is read per request, so switching scenes (`cycleScene` shortcut / toolbar) applies from the next request and keeps `conversationMessages`: a new screenshot starts a new conversation anyway, and a follow-up after switching needs what it follows up on. An answer already streaming keeps its prompt. The header shows `scene · model`, since a shortcut or a toolbar hover can switch it unnoticed
-- Three streaming functions: `getSolutionStream` (first screenshot), `getFollowUpStream` (follow-up), `getGeneralStream` (multi-screenshot)
+- Three streaming functions: `getSolutionStream` (first screenshot), `getFollowUpStream` (follow-up), `getGeneralStream` (multi-screenshot), all run through `runAnswer()` in `shortcuts.ts`
 - 「关闭思考」 (`disableThinking`, per profile, off by default): the SDK has no field for it and every platform spells it differently, so `createThinkingOffFetch()` in `thinking.ts` wraps `fetch` and merges the fields into the request body — OpenRouter `reasoning: { enabled: false }`, OpenAI host or a `gpt-`/`o<n>` model name `reasoning_effort: 'none'`, everyone else both `thinking: { type: 'disabled' }` and `enable_thinking: false`. OpenAI rejects any unknown field, and thinking-only models reject the switch, so a 400/422 whose body mentions thinking/reasoning is resent without the fields and that base URL + model is remembered for the session. The switch never makes a request fail; at worst it costs one extra round trip
 - Conversation history (`conversationMessages`) is maintained in `shortcuts.ts` as `ModelMessage[]`
 - When an answer finishes naturally (not stopped, not failed), `handleGeneratedCode()` in `save-code.ts` copies its first code block to the clipboard and/or saves it as `<base><n>.<ext>` (extension from the fence language); both are opt-in and silent
@@ -346,7 +355,7 @@ These are read by dotenv in the main process and merged with renderer-side setti
 
 1. **Three TypeScript configs**: `tsconfig.node.json` (main + preload), `tsconfig.web.json` (renderer). The root `tsconfig.json` is a project references file only.
 
-2. **System prompts live in the renderer**: All preset scene prompts are defined in `src/renderer/src/lib/store/settings.ts` (`PRESET_SCENE_PROMPTS`). The main process only consumes the synced `customPrompt` and has no built-in prompt of its own.
+2. **System prompts live in the renderer**: All preset scene prompts are defined in `src/renderer/src/lib/store/settings.ts` (`PRESET_SCENE_PROMPTS`). The main process only consumes the synced `customPrompt` / `conversationPrompt` and has no built-in prompt of its own.
 
 3. **`global.mainWindow`**: The main window reference is stored as a global variable, declared in `src/main/index.d.ts`.
 
@@ -354,7 +363,7 @@ These are read by dotenv in the main process and merged with renderer-side setti
 
 5. **No shared types directory**: Main process types (`AppSettings`, `AppState`) are imported directly by the preload script from `../main/settings` and `../main/state`. This works because preload shares the Node.js tsconfig. Runtime code both sides need goes in `src/shared/` (included by both tsconfigs, imported by relative path) and must stay free of Electron, DOM and Node APIs.
 
-6. **Streaming orchestration is in `shortcuts.ts`**: Despite the filename, this 580+ line file is the central orchestrator for both global shortcuts AND AI streaming logic. It manages conversation history, abort controllers, and IPC communication for the entire AI workflow.
+6. **Streaming orchestration is in `shortcuts.ts`**: Despite the filename, this 800+ line file is the central orchestrator for both global shortcuts AND AI streaming logic. It manages conversation history, abort controllers, and IPC communication for the entire AI workflow.
 
 7. **Window movement**: The window can be moved via keyboard shortcuts in 200px steps (up/down/left/right), and resized by dragging its edges (see Window Resizing).
 

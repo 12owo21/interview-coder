@@ -199,20 +199,22 @@ export function SelectModel({
   )
 }
 
-/** The platform's own models not already listed above; only image-capable ones when known */
+/**
+ * The platform's own models not already listed above. All of them: a text-only
+ * model is fine for 对话模式, so those are only tagged, for 截图模式's sake
+ */
 function buildPlatformGroup(
   platform: PlatformModel[],
   presetIds: Set<string>,
   custom: ModelOption[]
 ) {
   const shown = new Set([...presetIds, ...custom.map((o) => o.id)])
-  const knowsVision = platform.some((m) => m.vision !== undefined)
   const options = platform
-    .filter((m) => !shown.has(m.id) && (!knowsVision || m.vision))
-    .map((m): ModelOption => ({ id: m.id }))
+    .filter((m) => !shown.has(m.id))
+    .map((m): ModelOption => ({ id: m.id, note: m.vision === false ? '仅文本' : undefined }))
     .sort((a, b) => a.id.localeCompare(b.id))
   return {
-    heading: `${knowsVision ? '平台上支持图片的模型' : '平台上的全部模型'}（${options.length}）`,
+    heading: `平台上的全部模型（${options.length}）`,
     options
   }
 }
