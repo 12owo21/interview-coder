@@ -1,8 +1,6 @@
-# 截屏解题助手
+# 编码面试助手 / 语音面试助手 / 在线考试助手 / 笔试助手
 
 > 面试和笔试的隐身 AI 助手：屏幕上的题，截图就解；面试官的问题，说完就有提示。
-
-关键词：编码面试助手 / 语音面试助手 / 在线考试助手 / 笔试助手
 
 > **版本说明**：v3 起新增对话模式，此后只维护 v3（`main` 分支）。只有截图解题的 v2 版本保留在 [`v2` 分支](https://github.com/ooboqoo/interview-coder-cn/tree/v2)，不再更新，安装包见 [v2.1.0](https://github.com/ooboqoo/interview-coder-cn/releases/tag/v2.1.0)。
 
