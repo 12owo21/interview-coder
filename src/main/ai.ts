@@ -65,19 +65,24 @@ function streamWith(
 export function getAssessmentStream(
   messages: ModelMessage[],
   abortSignal?: AbortSignal,
-  fixedPositions = false
+  fixedPositions = false,
+  personalityPrompt = ''
 ) {
   const profile = getAssessmentProfile()
   const openai = createProvider(profile)
   const { textStream } = streamText({
     model: openai.chat(getModel(profile)),
     system: [
-      '你是一个屏幕题目识别器。识别当前截图中的四个选项并选择正确答案。题目可能是单选、多选，也可能要求按顺序连续选择多个选项。',
+      personalityPrompt.trim()
+        ? `被测者的个人性格设定如下：\n<personality>\n${personalityPrompt.trim()}\n</personality>\n请依据该性格作答，并与本次测评前后的答案保持一致。`
+        : '',
+      '你是一个屏幕题目识别器。识别当前截图中的所有选项并选择正确答案。选项数量不固定，可能是单选、多选，也可能要求按顺序连续选择多个选项。',
       '只输出一个 JSON 对象，不要 Markdown、解释或其他文字。',
       fixedPositions
-        ? '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A"},"B":{"text":"选项B"},"C":{"text":"选项C"},"D":{"text":"选项D"}}}。只返回选项文本，不要返回坐标。'
-        : '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A","left":0,"top":0,"right":0,"bottom":0},"B":{"text":"选项B","left":0,"top":0,"right":0,"bottom":0},"C":{"text":"选项C","left":0,"top":0,"right":0,"bottom":0},"D":{"text":"选项D","left":0,"top":0,"right":0,"bottom":0}}}。',
-      'answers 必须是非空数组，只能包含 A、B、C、D；单选返回一个元素，多选返回多个元素，有顺序要求时严格按点击顺序排列。不要排序，不要解释，不要重复元素。',
+        ? '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A"}},"next":{"required":false}}。options 必须包含截图中实际出现的所有选项，选项键按 A、B、C… 顺序使用，只返回选项文本。'
+        : '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A","left":0,"top":0,"right":0,"bottom":0}},"next":{"required":false,"left":0,"top":0,"right":0,"bottom":0}}。options 必须包含截图中实际出现的所有选项，选项键按 A、B、C… 顺序使用。',
+      'answers 必须是非空数组，只能包含实际返回的选项键；单选返回一个元素，多选返回多个元素，有顺序要求时严格按点击顺序排列。不要排序，不要解释，不要重复元素。',
+      '如果截图中有明确的“下一步/继续/提交”等按钮且答题后需要点击它，next.required 返回 true，并返回该按钮矩形；否则 next.required 返回 false。',
       ...(fixedPositions
         ? []
         : ['每个矩形框必须紧贴对应选项按钮，坐标是截图像素，程序会使用矩形中心点击。'])

@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { MousePointerClick } from 'lucide-react'
+import { MousePointerClick, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -17,19 +19,26 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
     apiProfiles,
     assessmentProfileId,
     assessmentMemoryEnabled,
+    assessmentPersonalityPrompt,
     assessmentFixedClick,
     assessmentFixedPositions,
+    assessmentNextPosition,
     updateSetting
   } = useSettingsStore()
   const selected = apiProfiles.find((profile) => profile.id === assessmentProfileId)
   const [draftPositions, setDraftPositions] = useState(() =>
     Object.fromEntries(
-      (['A', 'B', 'C', 'D'] as const).map((letter) => {
+      Object.keys(assessmentFixedPositions).map((letter) => {
         const point = assessmentFixedPositions[letter]
         return [letter, { x: point ? String(point.x) : '', y: point ? String(point.y) : '' }]
       })
-    ) as Record<'A' | 'B' | 'C' | 'D', { x: string; y: string }>
+    ) as Record<string, { x: string; y: string }>
   )
+  const [draftNextPosition, setDraftNextPosition] = useState({
+    x: assessmentNextPosition ? String(assessmentNextPosition.x) : '',
+    y: assessmentNextPosition ? String(assessmentNextPosition.y) : ''
+  })
+  const letters = Object.keys(assessmentFixedPositions).sort()
 
   return (
     <SettingsCard Icon={MousePointerClick} title="做题模式 AI">
@@ -76,6 +85,19 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
             onCheckedChange={(checked) => updateSetting('assessmentMemoryEnabled', checked)}
           />
         </Field>
+        {assessmentMemoryEnabled && (
+          <Field
+            label="个人性格配置"
+            note="每次做题都会作为 AI 系统提示词的一部分，用于保持选择符合你的性格"
+          >
+            <Textarea
+              className="min-h-24 w-full bg-white"
+              value={assessmentPersonalityPrompt}
+              onChange={(event) => updateSetting('assessmentPersonalityPrompt', event.target.value)}
+              placeholder="描述你希望测评体现的性格"
+            />
+          </Field>
+        )}
         <Field
           label="固定选项位置"
           note="开启后忽略 AI 返回的坐标，只按这里配置的坐标点击"
@@ -88,7 +110,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
         </Field>
         {assessmentFixedClick && (
           <div className="space-y-2">
-            {(['A', 'B', 'C', 'D'] as const).map((letter) => {
+            {letters.map((letter) => {
               const draft = draftPositions[letter]
               const updatePoint = (axis: 'x' | 'y', value: string) => {
                 const nextDraft = { ...draftPositions[letter], [axis]: value }
@@ -130,6 +152,69 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
                 </div>
               )
             })}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-auto flex"
+              onClick={() => {
+                const nextLetter = String.fromCharCode(65 + letters.length)
+                if (letters.includes(nextLetter)) return
+                setDraftPositions({ ...draftPositions, [nextLetter]: { x: '', y: '' } })
+                updateSetting('assessmentFixedPositions', {
+                  ...assessmentFixedPositions,
+                  [nextLetter]: null
+                })
+              }}
+              title="增加选项位置"
+            >
+              <Plus className="size-4" />
+              增加选项
+            </Button>
+            <div className="flex items-center justify-end gap-2 border-t border-gray-400/30 pt-2 text-sm">
+              <span className="w-5 font-medium">下一步</span>
+              <Input
+                className="w-24 bg-white"
+                type="number"
+                min={0}
+                placeholder="x"
+                value={draftNextPosition.x}
+                onChange={(event) => {
+                  const xText = event.target.value
+                  const next = { ...draftNextPosition, x: xText }
+                  setDraftNextPosition(next)
+                  const x = Number(next.x)
+                  const y = Number(next.y)
+                  updateSetting(
+                    'assessmentNextPosition',
+                    next.x.trim() && next.y.trim() && Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0
+                      ? { x, y }
+                      : null
+                  )
+                }}
+              />
+              <span>,</span>
+              <Input
+                className="w-24 bg-white"
+                type="number"
+                min={0}
+                placeholder="y"
+                value={draftNextPosition.y}
+                onChange={(event) => {
+                  const yText = event.target.value
+                  const next = { ...draftNextPosition, y: yText }
+                  setDraftNextPosition(next)
+                  const x = Number(next.x)
+                  const y = Number(next.y)
+                  updateSetting(
+                    'assessmentNextPosition',
+                    next.x.trim() && next.y.trim() && Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0
+                      ? { x, y }
+                      : null
+                  )
+                }}
+              />
+            </div>
           </div>
         )}
       </div>

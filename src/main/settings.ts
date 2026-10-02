@@ -5,6 +5,9 @@ import type { HintMode } from '../shared/conversation'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
 import { setAssessmentMemoryEnabled } from './assessment-memory'
 
+export const DEFAULT_ASSESSMENT_PERSONALITY_PROMPT =
+  '我是一个积极、活泼、开朗、乐于沟通、具有团队合作精神的人，做选择时倾向于表现出自信、稳定、友善和积极主动。'
+
 ipcMain.handle('getAppVersion', () => {
   return app.getVersion()
 })
@@ -84,6 +87,7 @@ export const settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  assessmentPersonalityPrompt: DEFAULT_ASSESSMENT_PERSONALITY_PROMPT,
   /** Use user-configured screen coordinates instead of model-provided boxes. */
   assessmentFixedClick: false,
   assessmentFixedPositions: {
@@ -91,7 +95,8 @@ export const settings = {
     B: null as { x: number; y: number } | null,
     C: null as { x: number; y: number } | null,
     D: null as { x: number; y: number } | null
-  },
+  } as Record<string, { x: number; y: number } | null>,
+  assessmentNextPosition: null as { x: number; y: number } | null,
   /** 截图模式's system prompt, from the renderer's active scene */
   customPrompt: '',
   /** 对话模式's system prompt, from the renderer's active scene */

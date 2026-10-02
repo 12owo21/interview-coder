@@ -226,11 +226,10 @@ interface Settings {
   /** The profile used by the experimental 做题 mode */
   assessmentProfileId: string
   assessmentMemoryEnabled: boolean
+  assessmentPersonalityPrompt: string
   assessmentFixedClick: boolean
-  assessmentFixedPositions: Record<
-    'A' | 'B' | 'C' | 'D',
-    { x: number; y: number } | null
-  >
+  assessmentFixedPositions: Record<string, { x: number; y: number } | null>
+  assessmentNextPosition: { x: number; y: number } | null
   /**
    * Whether the user has ever saved an API key. The welcome dialog keys off
    * this rather than the live `apiKey`, so switching to a profile that is still
@@ -379,8 +378,11 @@ const defaultSettings: Settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  assessmentPersonalityPrompt:
+    '我是一个积极、活泼、开朗、乐于沟通、具有团队合作精神的人，做选择时倾向于表现出自信、稳定、友善和积极主动。',
   assessmentFixedClick: false,
   assessmentFixedPositions: { A: null, B: null, C: null, D: null },
+  assessmentNextPosition: null,
   hasConfiguredApi: false,
   apiBaseURL: '',
   customBaseURLs: [],

@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto'
 
-export type AnswerLetter = 'A' | 'B' | 'C' | 'D'
+export type AnswerLetter = string
 export interface AssessmentMemoryInput {
   question: string
-  options: Record<AnswerLetter, string>
+  options: Record<string, string>
   answers: AnswerLetter[]
 }
 export interface AssessmentMemoryRecord extends AssessmentMemoryInput {
@@ -64,10 +64,11 @@ export function getAssessmentMemoryContext(): string {
 export function addAssessmentMemory(input: AssessmentMemoryInput): AssessmentMemoryRecord | null {
   if (!enabled) return null
   if (!session) session = createSession()
-  const optionValues = (['A', 'B', 'C', 'D'] as const).map((letter) => normalize(input.options[letter]))
+  const optionEntries = Object.entries(input.options).sort(([a], [b]) => a.localeCompare(b))
+  const optionValues = optionEntries.map(([letter, text]) => `${letter}=${normalize(text)}`)
   const stemKey = hash(normalize(input.question))
   const exactQuestionKey = hash([stemKey, ...optionValues].join('\n'))
-  const contentQuestionKey = hash([stemKey, ...[...optionValues].sort()].join('\n'))
+  const contentQuestionKey = hash([stemKey, ...optionValues.slice().sort()].join('\n'))
   const record: AssessmentMemoryRecord = {
     ...input,
     index: session.records.length + 1,

@@ -59,17 +59,26 @@ export default function AssessmentPage() {
       setError(message)
       setBusy(false)
     })
-    window.api.onAssessmentClicked(({ answers, x, y }) => {
-      setMessage(`已按顺序点击 ${answers.join(' → ')}（最后：${x}, ${y}）`)
+    window.api.onAssessmentClicked(({ answers, x, y, nextClicked }) => {
+      setMessage(`已按顺序点击 ${answers.join(' → ')}${nextClicked ? '，已点击下一步' : ''}（最后：${x}, ${y}）`)
       setBusy(false)
     })
     window.api.onAssessmentLoadingStart(() => setBusy(true))
     window.api.onAssessmentLoadingEnd(() => setBusy(false))
+    window.api.onAssessmentLoopStarted(() => {
+      setBusy(true)
+      setMessage('做题循环已启动，再次按做题快捷键可停止')
+    })
+    window.api.onAssessmentLoopStopped(() => {
+      setBusy(false)
+      setMessage('做题循环已停止')
+    })
     return () => {
       window.api.removeAssessmentResultListener()
       window.api.removeAssessmentErrorListener()
       window.api.removeAssessmentClickedListener()
       window.api.removeAssessmentLoadingListeners()
+      window.api.removeAssessmentLoopListeners()
     }
   }, [])
 

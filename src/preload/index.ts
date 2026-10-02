@@ -90,7 +90,7 @@ const api = {
     ipcRenderer.on('assessment-error', (_event, message: string) => callback(message))
   },
   removeAssessmentErrorListener: () => ipcRenderer.removeAllListeners('assessment-error'),
-  onAssessmentClicked: (callback: (data: { answers: string[]; x: number; y: number }) => void) => {
+  onAssessmentClicked: (callback: (data: { answers: string[]; x: number; y: number; nextClicked?: boolean }) => void) => {
     ipcRenderer.on('assessment-clicked', (_event, data) => callback(data))
   },
   removeAssessmentClickedListener: () => ipcRenderer.removeAllListeners('assessment-clicked'),
@@ -99,6 +99,12 @@ const api = {
   removeAssessmentLoadingListeners: () => {
     ipcRenderer.removeAllListeners('assessment-loading-start')
     ipcRenderer.removeAllListeners('assessment-loading-end')
+  },
+  onAssessmentLoopStarted: (callback: () => void) => ipcRenderer.on('assessment-loop-started', callback),
+  onAssessmentLoopStopped: (callback: () => void) => ipcRenderer.on('assessment-loop-stopped', callback),
+  removeAssessmentLoopListeners: () => {
+    ipcRenderer.removeAllListeners('assessment-loop-started')
+    ipcRenderer.removeAllListeners('assessment-loop-stopped')
   },
 
   // Settings the toolbar window needs, pushed from main (its own store is a separate copy)

@@ -20,7 +20,7 @@ import { settings, getModeProfile } from './settings'
 import { getTranscriptionText, clearTranscriptionText } from './transcription'
 import { consumeStream, extractErrorMessage, isImageInputRefused } from './stream'
 import { requestHint, stopHints, clearConversation } from './conversation'
-import { analyzeAssessmentScreenshot } from './assessment'
+import { stopAssessmentLoop, toggleAssessmentLoop } from './assessment'
 
 type Shortcut = {
   action: string
@@ -400,7 +400,7 @@ function switchMode() {
 
 const callbacks: Record<string, () => void> = {
   assessmentQuestion: () => {
-    void analyzeAssessmentScreenshot()
+    toggleAssessmentLoop()
   },
   hideOrShowMainWindow: async () => {
     const mainWindow = global.mainWindow
@@ -564,6 +564,7 @@ const callbacks: Record<string, () => void> = {
 
   // Stop current AI solution stream, or 对话模式's hints
   stopSolutionStream: () => {
+    stopAssessmentLoop()
     if (state.inConversationPage) stopHints()
     else abortCurrentStream('user')
   },
