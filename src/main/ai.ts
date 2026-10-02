@@ -1,6 +1,6 @@
 import { streamText, type ModelMessage } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
-import { settings, getModeProfile } from './settings'
+import { settings, getAssessmentProfile, getModeProfile } from './settings'
 import type { ApiProfile, AppMode } from '../shared/api-profile'
 import { buildRequestHeaders } from '../shared/request-headers'
 import { createThinkingOffFetch } from './thinking'
@@ -52,6 +52,30 @@ function streamWith(
   const { textStream } = streamText({
     model: openai.chat(getModel(profile)),
     system: getSystemPrompt(mode, extraSystem),
+    messages,
+    abortSignal,
+    onError: (err) => {
+      throw err.error ?? err
+    }
+  })
+  return textStream
+}
+
+/** Experimental 做题模式: return a strict answer plus option coordinates. */
+export function getAssessmentStream(
+  messages: ModelMessage[],
+  abortSignal?: AbortSignal
+) {
+  const profile = getAssessmentProfile()
+  const openai = createProvider(profile)
+  const { textStream } = streamText({
+    model: openai.chat(getModel(profile)),
+    system: [
+      '你是一个屏幕题目识别器。识别当前截图中的四个选项并选择正确答案。',
+      '只输出一个 JSON 对象，不要 Markdown、解释或其他文字。',
+      '格式必须是 {"answer":"A","options":{"A":{"left":0,"top":0,"right":0,"bottom":0},"B":{"left":0,"top":0,"right":0,"bottom":0},"C":{"left":0,"top":0,"right":0,"bottom":0},"D":{"left":0,"top":0,"right":0,"bottom":0}}}。',
+      'answer 只能是 A、B、C、D 之一；每个矩形框必须紧贴对应选项按钮，坐标是截图像素，不能返回估算的文字位置。程序会使用矩形中心点击。'
+    ].join('\n'),
     messages,
     abortSignal,
     onError: (err) => {

@@ -64,8 +64,31 @@ function getCaptureTarget(): { display: Display; region: RegionRect | null } {
 }
 
 export function takeScreenshot(): Promise<string | void> {
+  return takeScreenshotWithMetadata().then((result) => result?.data)
+}
+
+export interface ScreenshotCapture {
+  data: string
+  /** Size of the image sent to the model, in PNG pixels. */
+  imageWidth: number
+  imageHeight: number
+  fullWidth: number
+  fullHeight: number
+  /** Physical screen size used by OS-level mouse input. */
+  physicalWidth: number
+  physicalHeight: number
+  /** Physical origin of this display in the virtual desktop. */
+  originX: number
+  originY: number
+  /** Crop origin inside the full captured display image, in PNG pixels. */
+  offsetX: number
+  offsetY: number
+}
+
+/** Capture the same image as takeScreenshot(), while retaining coordinate metadata. */
+export function takeScreenshotWithMetadata(): Promise<ScreenshotCapture | undefined> {
   const mainWindow = global.mainWindow
-  if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve()
+  if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(undefined)
 
   const { display, region } = getCaptureTarget()
   const { width, height } = display.size
@@ -75,11 +98,29 @@ export function takeScreenshot(): Promise<string | void> {
     .then((sources) => {
       if (sources.length === 0) return undefined
       const { thumbnail } = findScreenSource(sources, display) ?? sources[0]
-      const image = region ? thumbnail.crop(regionToPixels(region, thumbnail.getSize())) : thumbnail
-      return image.toPNG().toString('base64')
+      const crop = region ? regionToPixels(region, thumbnail.getSize()) : null
+      const image = crop ? thumbnail.crop(crop) : thumbnail
+      const size = image.getSize()
+      const fullSize = thumbnail.getSize()
+      const physicalSize = settingsResolution(display)
+      const scale = process.platform === 'darwin' ? 1 : display.scaleFactor
+      return {
+        data: image.toPNG().toString('base64'),
+        imageWidth: size.width,
+        imageHeight: size.height,
+        fullWidth: fullSize.width,
+        fullHeight: fullSize.height,
+        physicalWidth: physicalSize.width,
+        physicalHeight: physicalSize.height,
+        originX: Math.round(display.bounds.x * scale),
+        originY: Math.round(display.bounds.y * scale),
+        offsetX: crop?.x ?? 0,
+        offsetY: crop?.y ?? 0
+      }
     })
     .catch((error) => {
       console.error('Error taking screenshot:', error)
+      return undefined
     })
 }
 

@@ -78,6 +78,7 @@ export const settings = {
   apiProfiles: [] as ApiProfile[],
   screenshotProfileId: '',
   conversationProfileId: '',
+  assessmentProfileId: '',
   /** 截图模式's system prompt, from the renderer's active scene */
   customPrompt: '',
   /** 对话模式's system prompt, from the renderer's active scene */
@@ -126,6 +127,21 @@ export type AppSettings = typeof settings
 export function getModeProfile(mode: AppMode): ApiProfile {
   const id = mode === 'screenshot' ? settings.screenshotProfileId : settings.conversationProfileId
   const profile = settings.apiProfiles.find((p) => p.id === id)
+  if (profile) return profile
+  return {
+    id: '',
+    name: '',
+    apiBaseURL: settings.apiBaseURL,
+    apiKey: settings.apiKey,
+    apiHeaders: settings.apiHeaders,
+    model: settings.model,
+    disableThinking: settings.disableThinking
+  }
+}
+
+/** The profile used by the experimental 做题 mode. */
+export function getAssessmentProfile(): ApiProfile {
+  const profile = settings.apiProfiles.find((p) => p.id === settings.assessmentProfileId)
   if (profile) return profile
   return {
     id: '',

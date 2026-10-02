@@ -223,6 +223,8 @@ interface Settings {
   screenshotProfileId: string
   /** The profile 对话模式 asks for hints with; text only, so a fast model suits it */
   conversationProfileId: string
+  /** The profile used by the experimental 做题 mode */
+  assessmentProfileId: string
   /**
    * Whether the user has ever saved an API key. The welcome dialog keys off
    * this rather than the live `apiKey`, so switching to a profile that is still
@@ -369,6 +371,7 @@ const defaultSettings: Settings = {
   // Filled in on rehydrate: both start out on the profile being edited
   screenshotProfileId: '',
   conversationProfileId: '',
+  assessmentProfileId: '',
   hasConfiguredApi: false,
   apiBaseURL: '',
   customBaseURLs: [],
@@ -557,7 +560,9 @@ export const useSettingsStore = create<SettingsStore>()(
           screenshotProfileId:
             state.screenshotProfileId === id ? next.id : state.screenshotProfileId,
           conversationProfileId:
-            state.conversationProfileId === id ? next.id : state.conversationProfileId
+            state.conversationProfileId === id ? next.id : state.conversationProfileId,
+          assessmentProfileId:
+            state.assessmentProfileId === id ? next.id : state.assessmentProfileId
         }
         if (id !== state.activeProfileId) {
           set({ apiProfiles, ...modeProfiles })
@@ -791,10 +796,14 @@ export const useSettingsStore = create<SettingsStore>()(
         )
         state.apiProfiles = reconcileApiProfiles(state)
         // Before modes existed the profile being edited was the one in use
-        for (const key of ['screenshotProfileId', 'conversationProfileId'] as const) {
+        for (const key of [
+          'screenshotProfileId',
+          'conversationProfileId',
+          'assessmentProfileId'
+        ] as const) {
           if (!state.apiProfiles.some((p) => p.id === state[key])) {
             state[key] =
-              key === 'conversationProfileId' && state.screenshotProfileId
+              key !== 'screenshotProfileId' && state.screenshotProfileId
                 ? state.screenshotProfileId
                 : state.activeProfileId
           }

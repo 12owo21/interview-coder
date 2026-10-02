@@ -76,6 +76,11 @@ const defaultShortcuts: Record<string, Omit<Shortcut, 'defaultKey'>> = {
     key: `${platformAlt}+Shift+Enter`,
     category: 'Screenshot'
   },
+  assessmentQuestion: {
+    action: 'assessmentQuestion',
+    key: `${platformAlt}+Q`,
+    category: '做题模式'
+  },
   pickCaptureRegion: {
     action: 'pickCaptureRegion',
     key: `${platformAlt}+Shift+R`,

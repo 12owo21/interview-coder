@@ -7,6 +7,7 @@ import {
   Keyboard,
   LibraryBig,
   MessagesSquare,
+  MousePointerClick,
   Mic,
   Palette,
   type LucideIcon
@@ -23,8 +24,17 @@ import { ShortcutsSection } from './sections/ShortcutsSection'
 import { ScreenshotSection } from './sections/ScreenshotSection'
 import { ConversationSection } from './sections/ConversationSection'
 import { KnowledgeSection } from './sections/KnowledgeSection'
+import { AssessmentSection } from './sections/AssessmentSection'
 
-type Tab = 'ai' | 'knowledge' | 'voice' | 'appearance' | 'shortcuts' | 'screenshot' | 'conversation'
+type Tab =
+  | 'ai'
+  | 'knowledge'
+  | 'voice'
+  | 'appearance'
+  | 'shortcuts'
+  | 'screenshot'
+  | 'conversation'
+  | 'assessment'
 
 /**
  * Grouped by what a setting affects: the shared ones first, then one group per
@@ -46,6 +56,7 @@ const NAV: { heading: string; items: { tab: Tab; label: string; Icon: LucideIcon
     items: [
       { tab: 'screenshot', label: '截图模式', Icon: Camera },
       { tab: 'conversation', label: '对话模式', Icon: MessagesSquare }
+      ,{ tab: 'assessment', label: '做题模式', Icon: MousePointerClick }
     ]
   }
 ]
@@ -114,6 +125,7 @@ export default function SettingsPage() {
         onOpenKnowledge={() => openTab('knowledge')}
       />
     )
+    ,assessment: <AssessmentSection onEditProfile={editProfile} />
   }
 
   return (

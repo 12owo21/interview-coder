@@ -9,6 +9,7 @@ import type { CaptureRegion, RegionRect } from '../shared/capture-region'
 import type { TranscriptionOptions } from '../main/transcription'
 import type { ConversationSnapshot, HintCard, Utterance } from '../shared/conversation'
 import type { KnowledgeDoc, KnowledgeImportResult, KnowledgePatch } from '../shared/knowledge'
+import type { AssessmentResult } from '../main/assessment'
 
 // Custom APIs for renderer
 const api = {
@@ -80,6 +81,21 @@ const api = {
     ipcRenderer.invoke('setIgnoreMouse', ignore) as Promise<boolean>,
   clickScreenPoint: (point: { x: number; y: number }) =>
     ipcRenderer.invoke('click-screen-point', point) as Promise<void>,
+  analyzeAssessment: () => ipcRenderer.invoke('assessment:analyze') as Promise<void>,
+  onAssessmentResult: (callback: (result: AssessmentResult) => void) => {
+    ipcRenderer.on('assessment-result', (_event, result: AssessmentResult) => callback(result))
+  },
+  removeAssessmentResultListener: () => ipcRenderer.removeAllListeners('assessment-result'),
+  onAssessmentError: (callback: (message: string) => void) => {
+    ipcRenderer.on('assessment-error', (_event, message: string) => callback(message))
+  },
+  removeAssessmentErrorListener: () => ipcRenderer.removeAllListeners('assessment-error'),
+  onAssessmentLoadingStart: (callback: () => void) => ipcRenderer.on('assessment-loading-start', callback),
+  onAssessmentLoadingEnd: (callback: () => void) => ipcRenderer.on('assessment-loading-end', callback),
+  removeAssessmentLoadingListeners: () => {
+    ipcRenderer.removeAllListeners('assessment-loading-start')
+    ipcRenderer.removeAllListeners('assessment-loading-end')
+  },
 
   // Settings the toolbar window needs, pushed from main (its own store is a separate copy)
   onSyncToolbarSettings: (

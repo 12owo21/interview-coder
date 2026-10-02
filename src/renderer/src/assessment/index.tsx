@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { AppHeader } from '@/coder/AppHeader'
 import { useSettingsStore } from '@/lib/store/settings'
 import { useAppStore } from '@/lib/store/app'
+import type { AssessmentResult } from '../../../main/assessment'
 
 function parsePoint(value: string): { x: number; y: number } | null {
   const parts = value.split(/[,，\s]+/).filter(Boolean)
@@ -22,6 +23,8 @@ export default function AssessmentPage() {
   const [screenSize, setScreenSize] = useState<string | null>(null)
   const [message, setMessage] = useState('请输入屏幕坐标，例如：500,300')
   const [busy, setBusy] = useState(false)
+  const [result, setResult] = useState<AssessmentResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     document.body.style.opacity = opacity.toString()
@@ -44,6 +47,25 @@ export default function AssessmentPage() {
       useSettingsStore.getState().adjustOpacity(delta)
     })
     return () => window.api.removeAdjustOpacityListener()
+  }, [])
+
+  useEffect(() => {
+    window.api.onAssessmentResult((next) => {
+      setResult(next)
+      setError(null)
+      setBusy(false)
+    })
+    window.api.onAssessmentError((message) => {
+      setError(message)
+      setBusy(false)
+    })
+    window.api.onAssessmentLoadingStart(() => setBusy(true))
+    window.api.onAssessmentLoadingEnd(() => setBusy(false))
+    return () => {
+      window.api.removeAssessmentResultListener()
+      window.api.removeAssessmentErrorListener()
+      window.api.removeAssessmentLoadingListeners()
+    }
   }, [])
 
   useEffect(() => {
@@ -100,6 +122,24 @@ export default function AssessmentPage() {
             ))}
           </div>
           <p className="mt-4 text-xs opacity-60">{message}</p>
+          <Button
+            className="mt-4 w-full"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              setError(null)
+              setResult(null)
+              void window.api.analyzeAssessment()
+            }}
+          >
+            {busy ? '分析中…' : '截图并分析（快捷键 Ctrl+Q）'}
+          </Button>
+          {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+          {result && (
+            <pre className="mt-4 max-h-64 overflow-auto rounded-md bg-black/10 p-3 text-xs">
+              {JSON.stringify(result, null, 2)}
+            </pre>
+          )}
         </section>
       </main>
     </div>
