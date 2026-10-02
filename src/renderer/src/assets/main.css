@@ -39,6 +39,12 @@
   color: var(--app-surface-fg);
 }
 
+/* 做题模式使用与对话模式相同的灰色窗口底色，而不是透明到底 */
+.assessment-page {
+  background: var(--app-surface-bg);
+  color: var(--app-surface-fg);
+}
+
 .panel-scroll {
   scrollbar-width: thin;
   scrollbar-color: var(--app-scrollbar-thumb) transparent;

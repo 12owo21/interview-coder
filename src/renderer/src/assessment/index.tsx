@@ -71,7 +71,7 @@ export default function AssessmentPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="assessment-page flex h-screen flex-col">
       <AppHeader mode="assessment" />
       <main className="flex flex-1 items-center justify-center p-6">
         <section className="w-full max-w-md rounded-xl border border-app-border bg-app-card p-6 shadow-sm">
