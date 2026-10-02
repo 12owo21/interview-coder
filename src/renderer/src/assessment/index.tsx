@@ -59,11 +59,16 @@ export default function AssessmentPage() {
       setError(message)
       setBusy(false)
     })
+    window.api.onAssessmentClicked(({ answer, x, y }) => {
+      setMessage(`已自动点击 ${answer}（${x}, ${y}）`)
+      setBusy(false)
+    })
     window.api.onAssessmentLoadingStart(() => setBusy(true))
     window.api.onAssessmentLoadingEnd(() => setBusy(false))
     return () => {
       window.api.removeAssessmentResultListener()
       window.api.removeAssessmentErrorListener()
+      window.api.removeAssessmentClickedListener()
       window.api.removeAssessmentLoadingListeners()
     }
   }, [])

@@ -4,6 +4,7 @@ import { takeScreenshotWithMetadata } from './take-screenshot'
 import { getAssessmentProfile } from './settings'
 import { getAssessmentStream } from './ai'
 import { consumeStream, extractErrorMessage } from './stream'
+import { clickScreenPoint } from './click'
 
 type AssessmentOption = { x: number; y: number }
 type ModelOption =
@@ -128,6 +129,13 @@ export async function analyzeAssessmentScreenshot(): Promise<void> {
       captureOffset: { x: capture.offsetX, y: capture.offsetY }
     }
     mainWindow.webContents.send('assessment-result', result)
+    const target = result.options[result.answer]
+    await clickScreenPoint(target)
+    mainWindow.webContents.send('assessment-clicked', {
+      answer: result.answer,
+      x: target.x,
+      y: target.y
+    })
   } catch (error) {
     mainWindow.webContents.send('assessment-error', extractErrorMessage(error))
   } finally {
