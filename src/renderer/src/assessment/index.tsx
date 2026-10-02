@@ -59,8 +59,8 @@ export default function AssessmentPage() {
       setError(message)
       setBusy(false)
     })
-    window.api.onAssessmentClicked(({ answer, x, y }) => {
-      setMessage(`已自动点击 ${answer}（${x}, ${y}）`)
+    window.api.onAssessmentClicked(({ answers, x, y }) => {
+      setMessage(`已按顺序点击 ${answers.join(' → ')}（最后：${x}, ${y}）`)
       setBusy(false)
     })
     window.api.onAssessmentLoadingStart(() => setBusy(true))

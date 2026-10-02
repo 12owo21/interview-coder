@@ -7,13 +7,17 @@ import { consumeStream, extractErrorMessage } from './stream'
 import { clickScreenPoint } from './click'
 
 type AssessmentOption = { x: number; y: number }
+type AnswerLetter = 'A' | 'B' | 'C' | 'D'
 type ModelOption =
   | AssessmentOption
   | { left: number; top: number; right: number; bottom: number }
 export type AssessmentResult = {
   raw: string
-  answer: 'A' | 'B' | 'C' | 'D'
-  options: Record<'A' | 'B' | 'C' | 'D', AssessmentOption>
+  /** First answer, retained for compatibility with the previous UI. */
+  answer: AnswerLetter
+  /** Ordered answers to click, including multi-select/order-sensitive questions. */
+  answers: AnswerLetter[]
+  options: Record<AnswerLetter, AssessmentOption>
   imageSize: { width: number; height: number }
   fullImageSize: { width: number; height: number }
   physicalScreenSize: { width: number; height: number }
@@ -28,11 +32,25 @@ type ParsedAssessment = Omit<
 function parseResult(raw: string): ParsedAssessment {
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('模型没有返回 JSON')
-  const value = JSON.parse(match[0]) as Partial<AssessmentResult>
-  if (!value.answer || !['A', 'B', 'C', 'D'].includes(value.answer)) {
-    throw new Error('模型返回的答案不是 A/B/C/D')
+  const value = JSON.parse(match[0]) as {
+    answer?: unknown
+    answers?: unknown
+    options?: Record<AnswerLetter, ModelOption>
   }
-  const options = value.options as Record<'A' | 'B' | 'C' | 'D', ModelOption> | undefined
+  const rawAnswers = value.answers ?? (value.answer ? [value.answer] : undefined)
+  if (!Array.isArray(rawAnswers) || rawAnswers.length === 0 || rawAnswers.length > 4) {
+    throw new Error('模型返回的 answers 必须是 1 到 4 个选项的数组')
+  }
+  const answers = rawAnswers.map((answer) => {
+    if (typeof answer !== 'string' || !['A', 'B', 'C', 'D'].includes(answer)) {
+      throw new Error('模型返回的答案只能是 A/B/C/D')
+    }
+    return answer as AnswerLetter
+  })
+  if (new Set(answers).size !== answers.length) {
+    throw new Error('模型返回的答案不能重复')
+  }
+  const options = value.options
   if (!options) throw new Error('模型没有返回四个选项的坐标')
   for (const letter of ['A', 'B', 'C', 'D'] as const) {
     const point = options?.[letter]
@@ -58,12 +76,17 @@ function parseResult(raw: string): ParsedAssessment {
       }
       return [letter, point]
     })
-  ) as Record<'A' | 'B' | 'C' | 'D', AssessmentOption>
+  ) as Record<AnswerLetter, AssessmentOption>
   return {
     raw,
-    answer: value.answer as AssessmentResult['answer'],
+    answer: answers[0],
+    answers,
     options: normalizedOptions
   }
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export async function analyzeAssessmentScreenshot(): Promise<void> {
@@ -129,12 +152,14 @@ export async function analyzeAssessmentScreenshot(): Promise<void> {
       captureOffset: { x: capture.offsetX, y: capture.offsetY }
     }
     mainWindow.webContents.send('assessment-result', result)
-    const target = result.options[result.answer]
-    await clickScreenPoint(target)
+    for (const [index, answer] of result.answers.entries()) {
+      if (index > 0) await wait(500)
+      await clickScreenPoint(result.options[answer])
+    }
     mainWindow.webContents.send('assessment-clicked', {
-      answer: result.answer,
-      x: target.x,
-      y: target.y
+      answers: result.answers,
+      x: result.options[result.answers.at(-1)!].x,
+      y: result.options[result.answers.at(-1)!].y
     })
   } catch (error) {
     mainWindow.webContents.send('assessment-error', extractErrorMessage(error))

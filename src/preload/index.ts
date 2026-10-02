@@ -90,7 +90,7 @@ const api = {
     ipcRenderer.on('assessment-error', (_event, message: string) => callback(message))
   },
   removeAssessmentErrorListener: () => ipcRenderer.removeAllListeners('assessment-error'),
-  onAssessmentClicked: (callback: (data: { answer: string; x: number; y: number }) => void) => {
+  onAssessmentClicked: (callback: (data: { answers: string[]; x: number; y: number }) => void) => {
     ipcRenderer.on('assessment-clicked', (_event, data) => callback(data))
   },
   removeAssessmentClickedListener: () => ipcRenderer.removeAllListeners('assessment-clicked'),
