@@ -225,6 +225,11 @@ interface Settings {
   conversationProfileId: string
   /** The profile used by the experimental 做题 mode */
   assessmentProfileId: string
+  assessmentFixedClick: boolean
+  assessmentFixedPositions: Record<
+    'A' | 'B' | 'C' | 'D',
+    { x: number; y: number } | null
+  >
   /**
    * Whether the user has ever saved an API key. The welcome dialog keys off
    * this rather than the live `apiKey`, so switching to a profile that is still
@@ -372,6 +377,8 @@ const defaultSettings: Settings = {
   screenshotProfileId: '',
   conversationProfileId: '',
   assessmentProfileId: '',
+  assessmentFixedClick: false,
+  assessmentFixedPositions: { A: null, B: null, C: null, D: null },
   hasConfiguredApi: false,
   apiBaseURL: '',
   customBaseURLs: [],

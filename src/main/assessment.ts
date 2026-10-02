@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { ModelMessage } from 'ai'
 import { takeScreenshotWithMetadata } from './take-screenshot'
-import { getAssessmentProfile } from './settings'
+import { getAssessmentProfile, settings } from './settings'
 import { getAssessmentStream } from './ai'
 import { consumeStream, extractErrorMessage } from './stream'
 import { clickScreenPoint } from './click'
@@ -29,7 +29,7 @@ type ParsedAssessment = Omit<
   'imageSize' | 'fullImageSize' | 'physicalScreenSize' | 'captureOffset'
 >
 
-function parseResult(raw: string): ParsedAssessment {
+function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('模型没有返回 JSON')
   const value = JSON.parse(match[0]) as {
@@ -51,7 +51,15 @@ function parseResult(raw: string): ParsedAssessment {
     throw new Error('模型返回的答案不能重复')
   }
   const options = value.options
-  if (!options) throw new Error('模型没有返回四个选项的坐标')
+  if (!options && requireOptions) throw new Error('模型没有返回四个选项的坐标')
+  if (!options) {
+    return {
+      raw,
+      answer: answers[0],
+      answers,
+      options: {} as AssessmentResult['options']
+    }
+  }
   for (const letter of ['A', 'B', 'C', 'D'] as const) {
     const point = options?.[letter]
     if (!point) {
@@ -120,14 +128,15 @@ export async function analyzeAssessmentScreenshot(): Promise<void> {
   ]
   const controller = new AbortController()
   try {
+    const fixedPositions = settings.assessmentFixedClick
     const outcome = await consumeStream(
-      (signal) => getAssessmentStream(messages, signal),
+      (signal) => getAssessmentStream(messages, signal, fixedPositions),
       controller,
       () => {}
     )
     if (outcome.status === 'failed') throw outcome.error
     if (outcome.status === 'aborted') return
-    const parsed = parseResult(outcome.text)
+    const parsed = parseResult(outcome.text, !fixedPositions)
     // The model sees the cropped image. Convert its points back to the full
     // captured display image before the future click step consumes them.
     const result: AssessmentResult = {
@@ -152,14 +161,23 @@ export async function analyzeAssessmentScreenshot(): Promise<void> {
       captureOffset: { x: capture.offsetX, y: capture.offsetY }
     }
     mainWindow.webContents.send('assessment-result', result)
-    for (const [index, answer] of result.answers.entries()) {
+    const clickOptions = fixedPositions ? settings.assessmentFixedPositions : result.options
+    const targets = result.answers.map((answer) => {
+      const target = clickOptions[answer]
+      if (!target || !Number.isInteger(target.x) || !Number.isInteger(target.y)) {
+        throw new Error(`请先在设置中配置选项 ${answer} 的固定坐标`)
+      }
+      return target
+    })
+    for (const [index, target] of targets.entries()) {
       if (index > 0) await wait(500)
-      await clickScreenPoint(result.options[answer])
+      await clickScreenPoint(target)
     }
+    const lastTarget = targets[targets.length - 1]
     mainWindow.webContents.send('assessment-clicked', {
       answers: result.answers,
-      x: result.options[result.answers.at(-1)!].x,
-      y: result.options[result.answers.at(-1)!].y
+      x: lastTarget.x,
+      y: lastTarget.y
     })
   } catch (error) {
     mainWindow.webContents.send('assessment-error', extractErrorMessage(error))

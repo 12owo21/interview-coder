@@ -64,7 +64,8 @@ function streamWith(
 /** Experimental 做题模式: return a strict answer plus option coordinates. */
 export function getAssessmentStream(
   messages: ModelMessage[],
-  abortSignal?: AbortSignal
+  abortSignal?: AbortSignal,
+  fixedPositions = false
 ) {
   const profile = getAssessmentProfile()
   const openai = createProvider(profile)
@@ -73,8 +74,13 @@ export function getAssessmentStream(
     system: [
       '你是一个屏幕题目识别器。识别当前截图中的四个选项并选择正确答案。题目可能是单选、多选，也可能要求按顺序连续选择多个选项。',
       '只输出一个 JSON 对象，不要 Markdown、解释或其他文字。',
-      '格式必须是 {"answers":["A"],"options":{"A":{"left":0,"top":0,"right":0,"bottom":0},"B":{"left":0,"top":0,"right":0,"bottom":0},"C":{"left":0,"top":0,"right":0,"bottom":0},"D":{"left":0,"top":0,"right":0,"bottom":0}}}。',
-      'answers 必须是非空数组，只能包含 A、B、C、D；单选返回一个元素，多选返回多个元素，有顺序要求时严格按点击顺序排列。不要排序，不要解释，不要重复元素。每个矩形框必须紧贴对应选项按钮，坐标是截图像素，程序会使用矩形中心点击。'
+      fixedPositions
+        ? '格式必须是 {"answers":["A"]}。只返回 answers，不要返回坐标。'
+        : '格式必须是 {"answers":["A"],"options":{"A":{"left":0,"top":0,"right":0,"bottom":0},"B":{"left":0,"top":0,"right":0,"bottom":0},"C":{"left":0,"top":0,"right":0,"bottom":0},"D":{"left":0,"top":0,"right":0,"bottom":0}}}。',
+      'answers 必须是非空数组，只能包含 A、B、C、D；单选返回一个元素，多选返回多个元素，有顺序要求时严格按点击顺序排列。不要排序，不要解释，不要重复元素。',
+      ...(fixedPositions
+        ? []
+        : ['每个矩形框必须紧贴对应选项按钮，坐标是截图像素，程序会使用矩形中心点击。'])
     ].join('\n'),
     messages,
     abortSignal,

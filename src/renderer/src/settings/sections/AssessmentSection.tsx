@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { MousePointerClick } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -10,8 +13,22 @@ import { useSettingsStore } from '@/lib/store/settings'
 import { Field, SettingsCard } from '../components'
 
 export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: string) => void }) {
-  const { apiProfiles, assessmentProfileId, updateSetting } = useSettingsStore()
+  const {
+    apiProfiles,
+    assessmentProfileId,
+    assessmentFixedClick,
+    assessmentFixedPositions,
+    updateSetting
+  } = useSettingsStore()
   const selected = apiProfiles.find((profile) => profile.id === assessmentProfileId)
+  const [draftPositions, setDraftPositions] = useState(() =>
+    Object.fromEntries(
+      (['A', 'B', 'C', 'D'] as const).map((letter) => {
+        const point = assessmentFixedPositions[letter]
+        return [letter, { x: point ? String(point.x) : '', y: point ? String(point.y) : '' }]
+      })
+    ) as Record<'A' | 'B' | 'C' | 'D', { x: string; y: string }>
+  )
 
   return (
     <SettingsCard Icon={MousePointerClick} title="做题模式 AI">
@@ -47,6 +64,64 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
           </SelectContent>
         </Select>
       </Field>
+      <div className="mt-5 space-y-3 border-t border-gray-400/40 pt-4">
+        <Field
+          label="固定选项位置"
+          note="开启后忽略 AI 返回的坐标，只按这里配置的坐标点击"
+        >
+          <Switch
+            className="scale-y-90"
+            checked={assessmentFixedClick}
+            onCheckedChange={(checked) => updateSetting('assessmentFixedClick', checked)}
+          />
+        </Field>
+        {assessmentFixedClick && (
+          <div className="space-y-2">
+            {(['A', 'B', 'C', 'D'] as const).map((letter) => {
+              const draft = draftPositions[letter]
+              const updatePoint = (axis: 'x' | 'y', value: string) => {
+                const nextDraft = { ...draftPositions[letter], [axis]: value }
+                setDraftPositions({ ...draftPositions, [letter]: nextDraft })
+                const x = Number(nextDraft.x)
+                const y = Number(nextDraft.y)
+                const complete =
+                  nextDraft.x.trim() !== '' &&
+                  nextDraft.y.trim() !== '' &&
+                  Number.isInteger(x) &&
+                  Number.isInteger(y) &&
+                  x >= 0 &&
+                  y >= 0
+                updateSetting('assessmentFixedPositions', {
+                  ...assessmentFixedPositions,
+                  [letter]: complete ? { x, y } : null
+                })
+              }
+              return (
+                <div key={letter} className="flex items-center justify-end gap-2 text-sm">
+                  <span className="w-5 font-medium">{letter}</span>
+                  <Input
+                    className="w-24 bg-white"
+                    type="number"
+                    min={0}
+                    placeholder="x"
+                    value={draft.x}
+                    onChange={(event) => updatePoint('x', event.target.value)}
+                  />
+                  <span>,</span>
+                  <Input
+                    className="w-24 bg-white"
+                    type="number"
+                    min={0}
+                    placeholder="y"
+                    value={draft.y}
+                    onChange={(event) => updatePoint('y', event.target.value)}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </SettingsCard>
   )
 }

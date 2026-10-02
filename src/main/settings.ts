@@ -79,6 +79,14 @@ export const settings = {
   screenshotProfileId: '',
   conversationProfileId: '',
   assessmentProfileId: '',
+  /** Use user-configured screen coordinates instead of model-provided boxes. */
+  assessmentFixedClick: false,
+  assessmentFixedPositions: {
+    A: null as { x: number; y: number } | null,
+    B: null as { x: number; y: number } | null,
+    C: null as { x: number; y: number } | null,
+    D: null as { x: number; y: number } | null
+  },
   /** 截图模式's system prompt, from the renderer's active scene */
   customPrompt: '',
   /** 对话模式's system prompt, from the renderer's active scene */
