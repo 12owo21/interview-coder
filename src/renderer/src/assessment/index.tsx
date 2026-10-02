@@ -98,9 +98,9 @@ export default function AssessmentPage() {
   }
 
   return (
-    <div className="assessment-page flex h-screen flex-col">
+    <div className="assessment-page flex min-h-screen flex-col">
       <AppHeader mode="assessment" />
-      <main className="flex flex-1 items-center justify-center p-6">
+      <main className="flex min-h-[calc(100vh-36px)] flex-1 items-center justify-center p-6">
         <section className="w-full max-w-md rounded-xl border border-app-border bg-app-card p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-2">
             <MousePointerClick className="size-5" />
