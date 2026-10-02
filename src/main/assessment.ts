@@ -5,14 +5,21 @@ import { getAssessmentProfile, settings } from './settings'
 import { getAssessmentStream } from './ai'
 import { consumeStream, extractErrorMessage } from './stream'
 import { clickScreenPoint } from './click'
+import {
+  addAssessmentMemory,
+  getAssessmentMemoryContext,
+  setAssessmentMemoryEnabled
+} from './assessment-memory'
 
 type AssessmentOption = { x: number; y: number }
 type AnswerLetter = 'A' | 'B' | 'C' | 'D'
 type ModelOption =
-  | AssessmentOption
-  | { left: number; top: number; right: number; bottom: number }
+  | (AssessmentOption & { text: string })
+  | { text: string; left: number; top: number; right: number; bottom: number }
 export type AssessmentResult = {
   raw: string
+  question: string
+  optionTexts: Record<AnswerLetter, string>
   /** First answer, retained for compatibility with the previous UI. */
   answer: AnswerLetter
   /** Ordered answers to click, including multi-select/order-sensitive questions. */
@@ -33,9 +40,13 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('模型没有返回 JSON')
   const value = JSON.parse(match[0]) as {
+    question?: unknown
     answer?: unknown
     answers?: unknown
     options?: Record<AnswerLetter, ModelOption>
+  }
+  if (typeof value.question !== 'string' || !value.question.trim()) {
+    throw new Error('模型没有返回原题目')
   }
   const rawAnswers = value.answers ?? (value.answer ? [value.answer] : undefined)
   if (!Array.isArray(rawAnswers) || rawAnswers.length === 0 || rawAnswers.length > 4) {
@@ -55,6 +66,8 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
   if (!options) {
     return {
       raw,
+      question: value.question,
+      optionTexts: { A: '', B: '', C: '', D: '' },
       answer: answers[0],
       answers,
       options: {} as AssessmentResult['options']
@@ -62,10 +75,13 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
   }
   for (const letter of ['A', 'B', 'C', 'D'] as const) {
     const point = options?.[letter]
-    if (!point) {
-      throw new Error(`模型没有返回选项 ${letter} 的有效坐标`)
+    if (!point || typeof point.text !== 'string' || !point.text.trim()) {
+      throw new Error(`模型没有返回选项 ${letter} 的文本`)
     }
   }
+  const optionTexts = Object.fromEntries(
+    (['A', 'B', 'C', 'D'] as const).map((letter) => [letter, options[letter].text.trim()])
+  ) as Record<AnswerLetter, string>
   const normalizedOptions = Object.fromEntries(
     (['A', 'B', 'C', 'D'] as const).map((letter) => {
       const point = options[letter]
@@ -79,6 +95,7 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
           y: Math.round((point.top + point.bottom) / 2)
         }]
       }
+      if (!requireOptions) return [letter, { x: 0, y: 0 }]
       if (!Number.isInteger(point.x) || !Number.isInteger(point.y)) {
         throw new Error(`模型返回的选项 ${letter} 坐标无效`)
       }
@@ -87,6 +104,8 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
   ) as Record<AnswerLetter, AssessmentOption>
   return {
     raw,
+    question: value.question,
+    optionTexts,
     answer: answers[0],
     answers,
     options: normalizedOptions
@@ -100,6 +119,7 @@ function wait(ms: number): Promise<void> {
 export async function analyzeAssessmentScreenshot(): Promise<void> {
   const mainWindow = global.mainWindow
   if (!mainWindow || mainWindow.isDestroyed()) return
+  setAssessmentMemoryEnabled(settings.assessmentMemoryEnabled)
   const profile = getAssessmentProfile()
   if (!profile.apiKey.trim()) {
     mainWindow.webContents.send('assessment-error', '请先在设置 → 做题模式中配置 AI API Key')
@@ -117,7 +137,17 @@ export async function analyzeAssessmentScreenshot(): Promise<void> {
     {
       role: 'user',
       content: [
-        { type: 'text', text: '分析这道题，返回答案和四个选项的可点击坐标。' },
+        {
+          type: 'text',
+          text: [
+            '分析这道题，返回原题目、四个选项文本、答案和可点击坐标。',
+            getAssessmentMemoryContext()
+              ? `本次测评之前的记录如下，请保持相同题目或相同选项内容的答案一致：\n${getAssessmentMemoryContext()}`
+              : ''
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+        },
         {
           type: 'text',
           text: `图片尺寸为 ${capture.imageWidth}×${capture.imageHeight} 像素。坐标原点是图片左上角。`
@@ -136,7 +166,7 @@ export async function analyzeAssessmentScreenshot(): Promise<void> {
     )
     if (outcome.status === 'failed') throw outcome.error
     if (outcome.status === 'aborted') return
-    const parsed = parseResult(outcome.text, !fixedPositions)
+    const parsed = parseResult(outcome.text, !fixedPositions || settings.assessmentMemoryEnabled)
     // The model sees the cropped image. Convert its points back to the full
     // captured display image before the future click step consumes them.
     const result: AssessmentResult = {
@@ -173,6 +203,11 @@ export async function analyzeAssessmentScreenshot(): Promise<void> {
       if (index > 0) await wait(500)
       await clickScreenPoint(target)
     }
+    addAssessmentMemory({
+      question: result.question,
+      options: result.optionTexts,
+      answers: result.answers
+    })
     const lastTarget = targets[targets.length - 1]
     mainWindow.webContents.send('assessment-clicked', {
       answers: result.answers,

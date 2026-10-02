@@ -75,8 +75,8 @@ export function getAssessmentStream(
       '你是一个屏幕题目识别器。识别当前截图中的四个选项并选择正确答案。题目可能是单选、多选，也可能要求按顺序连续选择多个选项。',
       '只输出一个 JSON 对象，不要 Markdown、解释或其他文字。',
       fixedPositions
-        ? '格式必须是 {"answers":["A"]}。只返回 answers，不要返回坐标。'
-        : '格式必须是 {"answers":["A"],"options":{"A":{"left":0,"top":0,"right":0,"bottom":0},"B":{"left":0,"top":0,"right":0,"bottom":0},"C":{"left":0,"top":0,"right":0,"bottom":0},"D":{"left":0,"top":0,"right":0,"bottom":0}}}。',
+        ? '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A"},"B":{"text":"选项B"},"C":{"text":"选项C"},"D":{"text":"选项D"}}}。只返回选项文本，不要返回坐标。'
+        : '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A","left":0,"top":0,"right":0,"bottom":0},"B":{"text":"选项B","left":0,"top":0,"right":0,"bottom":0},"C":{"text":"选项C","left":0,"top":0,"right":0,"bottom":0},"D":{"text":"选项D","left":0,"top":0,"right":0,"bottom":0}}}。',
       'answers 必须是非空数组，只能包含 A、B、C、D；单选返回一个元素，多选返回多个元素，有顺序要求时严格按点击顺序排列。不要排序，不要解释，不要重复元素。',
       ...(fixedPositions
         ? []

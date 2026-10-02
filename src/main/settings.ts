@@ -3,6 +3,7 @@ import type { CaptureRegion } from '../shared/capture-region'
 import type { ApiProfile, AppMode } from '../shared/api-profile'
 import type { HintMode } from '../shared/conversation'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
+import { setAssessmentMemoryEnabled } from './assessment-memory'
 
 ipcMain.handle('getAppVersion', () => {
   return app.getVersion()
@@ -14,6 +15,9 @@ ipcMain.handle('getAppSettings', () => {
 
 ipcMain.handle('updateAppSettings', (_event, _settings) => {
   Object.assign(settings, _settings)
+  if ('assessmentMemoryEnabled' in _settings) {
+    setAssessmentMemoryEnabled(settings.assessmentMemoryEnabled)
+  }
   if ('hideDockIcon' in _settings) {
     applyDockVisibility(settings.hideDockIcon)
   }
@@ -79,6 +83,7 @@ export const settings = {
   screenshotProfileId: '',
   conversationProfileId: '',
   assessmentProfileId: '',
+  assessmentMemoryEnabled: false,
   /** Use user-configured screen coordinates instead of model-provided boxes. */
   assessmentFixedClick: false,
   assessmentFixedPositions: {

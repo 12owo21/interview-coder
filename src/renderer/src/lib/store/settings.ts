@@ -225,6 +225,7 @@ interface Settings {
   conversationProfileId: string
   /** The profile used by the experimental 做题 mode */
   assessmentProfileId: string
+  assessmentMemoryEnabled: boolean
   assessmentFixedClick: boolean
   assessmentFixedPositions: Record<
     'A' | 'B' | 'C' | 'D',
@@ -377,6 +378,7 @@ const defaultSettings: Settings = {
   screenshotProfileId: '',
   conversationProfileId: '',
   assessmentProfileId: '',
+  assessmentMemoryEnabled: false,
   assessmentFixedClick: false,
   assessmentFixedPositions: { A: null, B: null, C: null, D: null },
   hasConfiguredApi: false,

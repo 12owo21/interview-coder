@@ -16,6 +16,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
   const {
     apiProfiles,
     assessmentProfileId,
+    assessmentMemoryEnabled,
     assessmentFixedClick,
     assessmentFixedPositions,
     updateSetting
@@ -65,6 +66,16 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
         </Select>
       </Field>
       <div className="mt-5 space-y-3 border-t border-gray-400/40 pt-4">
+        <Field
+          label="性格测评模式"
+          note="开启后记录本次运行中的题目、选项和答案；关闭后不读取也不保存记忆"
+        >
+          <Switch
+            className="scale-y-90"
+            checked={assessmentMemoryEnabled}
+            onCheckedChange={(checked) => updateSetting('assessmentMemoryEnabled', checked)}
+          />
+        </Field>
         <Field
           label="固定选项位置"
           note="开启后忽略 AI 返回的坐标，只按这里配置的坐标点击"
