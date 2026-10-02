@@ -5,6 +5,7 @@ import CoderPage from '@/coder'
 import ConversationPage from '@/conversation'
 import SettingsPage from '@/settings'
 import HelpPage from '@/help'
+import AssessmentPage from '@/assessment'
 import { OverlayToolbar } from '@/coder/OverlayToolbar'
 import { useSettingsStore } from '@/lib/store/settings'
 import { useShortcutsStore } from '@/lib/store/shortcuts'
@@ -89,6 +90,7 @@ export default function App() {
         <Routes>
           <Route index element={<CoderPage />} />
           <Route path="conversation" element={<ConversationPage />} />
+          <Route path="assessment" element={<AssessmentPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="help" element={<HelpPage />} />
           <Route path="toolbar" element={<OverlayToolbar />} />

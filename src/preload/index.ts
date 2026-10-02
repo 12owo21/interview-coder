@@ -78,6 +78,8 @@ const api = {
   // Set click-through from the settings page; returns the state main ended up in
   setIgnoreMouse: (ignore: boolean) =>
     ipcRenderer.invoke('setIgnoreMouse', ignore) as Promise<boolean>,
+  clickScreenPoint: (point: { x: number; y: number }) =>
+    ipcRenderer.invoke('click-screen-point', point) as Promise<void>,
 
   // Settings the toolbar window needs, pushed from main (its own store is a separate copy)
   onSyncToolbarSettings: (

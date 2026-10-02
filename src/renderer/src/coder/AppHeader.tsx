@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Camera, HelpCircle, MessagesSquare, SettingsIcon, X } from 'lucide-react'
+import { Camera, HelpCircle, MessagesSquare, MousePointerClick, SettingsIcon, X } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -10,20 +10,25 @@ import { formatDuration } from '@/lib/utils/duration'
 import { useElapsed } from '@/lib/use-elapsed'
 import { MODE_NAMES, MODE_PATHS } from '@/lib/use-mode-page'
 
-const TITLES: Record<AppMode, string> = {
+type HeaderMode = AppMode | 'assessment'
+
+const TITLES: Record<HeaderMode, string> = {
   screenshot: '截屏解题',
-  conversation: '对话提示'
+  conversation: '对话提示',
+  assessment: '做题'
 }
 
-export function AppHeader({ mode }: { mode: AppMode }) {
+export function AppHeader({ mode }: { mode: HeaderMode }) {
   const navigate = useNavigate()
   const { ignoreMouse } = useAppStore()
   // A shortcut or a toolbar hover can switch either unnoticed, so both stay in view
   const model = useSettingsStore((state) => {
+    if (mode === 'assessment') return undefined
     const id = mode === 'screenshot' ? state.screenshotProfileId : state.conversationProfileId
     return state.apiProfiles.find((p) => p.id === id)?.model
   })
   const sceneName = useSettingsStore((state) => {
+    if (mode === 'assessment') return undefined
     const id = mode === 'screenshot' ? state.activeSceneId : state.conversationSceneId
     return state.scenes.find((s) => s.id === id)?.name
   })
@@ -75,7 +80,10 @@ export function AppHeader({ mode }: { mode: AppMode }) {
         </span>
       )}
       <div className={`actions flex items-center ${ignoreMouse ? 'pointer-events-none' : ''}`}>
-        <ModeSwitch mode={mode} onSwitch={(next) => navigate(MODE_PATHS[next])} />
+        <ModeSwitch
+          mode={mode}
+          onSwitch={(next) => navigate(next === 'assessment' ? '/assessment' : MODE_PATHS[next])}
+        />
         <Button
           variant="ghost"
           className="size-8 cursor-pointer hover:opacity-50"
@@ -103,8 +111,9 @@ export function AppHeader({ mode }: { mode: AppMode }) {
 }
 
 /** Two icon buttons, the current mode lit; no `title`, which would draw outside content protection */
-function ModeSwitch({ mode, onSwitch }: { mode: AppMode; onSwitch: (mode: AppMode) => void }) {
-  const items: { value: AppMode; Icon: typeof Camera }[] = [
+function ModeSwitch({ mode, onSwitch }: { mode: HeaderMode; onSwitch: (mode: HeaderMode) => void }) {
+  const items: { value: HeaderMode; Icon: typeof Camera }[] = [
+    { value: 'assessment', Icon: MousePointerClick },
     { value: 'screenshot', Icon: Camera },
     { value: 'conversation', Icon: MessagesSquare }
   ]
@@ -123,7 +132,9 @@ function ModeSwitch({ mode, onSwitch }: { mode: AppMode; onSwitch: (mode: AppMod
           onClick={() => value !== mode && onSwitch(value)}
         >
           <Icon className="size-3.5" />
-          <span className="max-[520px]:hidden">{value === 'screenshot' ? '截图' : '对话'}</span>
+          <span className="max-[520px]:hidden">
+            {value === 'screenshot' ? '截图' : value === 'conversation' ? '对话' : '做题'}
+          </span>
         </button>
       ))}
     </div>
