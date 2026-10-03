@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MousePointerClick, Plus } from 'lucide-react'
+import { MousePointerClick, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -39,6 +39,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
     y: assessmentNextPosition ? String(assessmentNextPosition.y) : ''
   })
   const letters = Object.keys(assessmentFixedPositions).sort()
+  const nextLetter = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find((letter) => !letters.includes(letter))
 
   return (
     <SettingsCard Icon={MousePointerClick} title="做题模式 AI">
@@ -149,6 +150,22 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
                     value={draft.y}
                     onChange={(event) => updatePoint('y', event.target.value)}
                   />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`删除选项 ${letter}`}
+                    onClick={() => {
+                      const positions = { ...assessmentFixedPositions }
+                      const drafts = { ...draftPositions }
+                      delete positions[letter]
+                      delete drafts[letter]
+                      setDraftPositions(drafts)
+                      updateSetting('assessmentFixedPositions', positions)
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 </div>
               )
             })}
@@ -157,9 +174,9 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
               variant="outline"
               size="sm"
               className="ml-auto flex"
+              disabled={!nextLetter}
               onClick={() => {
-                const nextLetter = String.fromCharCode(65 + letters.length)
-                if (letters.includes(nextLetter)) return
+                if (!nextLetter) return
                 setDraftPositions({ ...draftPositions, [nextLetter]: { x: '', y: '' } })
                 updateSetting('assessmentFixedPositions', {
                   ...assessmentFixedPositions,

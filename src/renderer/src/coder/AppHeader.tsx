@@ -82,7 +82,7 @@ export function AppHeader({ mode }: { mode: HeaderMode }) {
       <div className={`actions flex items-center ${ignoreMouse ? 'pointer-events-none' : ''}`}>
         <ModeSwitch
           mode={mode}
-          onSwitch={(next) => navigate(next === 'assessment' ? '/assessment' : MODE_PATHS[next])}
+          onSwitch={(next) => navigate(MODE_PATHS[next])}
         />
         <Button
           variant="ghost"

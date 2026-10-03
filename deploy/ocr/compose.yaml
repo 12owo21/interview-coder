@@ -1,0 +1,30 @@
+services:
+  ocr:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.10-slim-bookworm}
+    image: assessment-ocr:1.0.0
+    container_name: assessment-ocr
+    restart: unless-stopped
+    ports:
+      - "192.168.100.128:8000:8000"
+    environment:
+      OCR_API_KEY: ${OCR_API_KEY:?Set OCR_API_KEY in .env}
+    mem_limit: 2g
+    memswap_limit: 2g
+    cpus: 1.5
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+

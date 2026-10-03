@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MousePointerClick } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ function parsePoint(value: string): { x: number; y: number } | null {
 }
 
 export default function AssessmentPage() {
+  const contentRef = useRef<HTMLElement>(null)
   const opacity = useSettingsStore((state) => state.opacity)
   const syncAppState = useAppStore((state) => state.syncAppState)
   const [pointText, setPointText] = useState('')
@@ -35,13 +36,27 @@ export default function AssessmentPage() {
   }, [opacity])
 
   useEffect(() => {
-    window.api.updateAppState({ inCoderPage: true })
+    useSettingsStore.getState().updateSetting('lastMode', 'assessment')
+    window.api.updateAppState({ inAssessmentPage: true })
     window.api.onSyncAppState((state) => syncAppState(state))
     return () => {
-      window.api.updateAppState({ inCoderPage: false })
+      window.api.updateAppState({ inAssessmentPage: false })
       window.api.removeSyncAppStateListener()
     }
   }, [syncAppState])
+
+  useEffect(() => {
+    const scroll = (direction: number) => {
+      const content = contentRef.current
+      content?.scrollBy({ top: direction * content.clientHeight * 0.8, behavior: 'smooth' })
+    }
+    window.api.onScrollPageUp(() => scroll(-1))
+    window.api.onScrollPageDown(() => scroll(1))
+    return () => {
+      window.api.removeScrollPageUpListener()
+      window.api.removeScrollPageDownListener()
+    }
+  }, [])
 
   useEffect(() => {
     window.api.onAdjustOpacity((delta) => {
@@ -115,10 +130,12 @@ export default function AssessmentPage() {
   }
 
   return (
-    <div className="assessment-page flex min-h-screen flex-col">
-      <AppHeader mode="assessment" />
-      <main className="flex min-h-[calc(100vh-36px)] flex-1 items-center justify-center p-6">
-        <section className="w-full max-w-md rounded-xl border border-app-border bg-app-card p-6 shadow-sm">
+    <div className="assessment-page flex h-screen flex-col overflow-hidden">
+      <div className="shrink-0">
+        <AppHeader mode="assessment" />
+      </div>
+      <main ref={contentRef} className="panel-scroll min-h-0 flex-1 overflow-y-auto p-6">
+        <section className="mx-auto w-full max-w-md rounded-xl border border-app-border bg-app-card p-6 shadow-sm">
           <div className="mb-5 flex items-center gap-2">
             <MousePointerClick className="size-5" />
             <h1 className="text-base font-medium">做题</h1>

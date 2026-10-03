@@ -21,7 +21,9 @@ export function OverlayToolbar() {
   const barRef = useRef<HTMLDivElement>(null)
   const syncAppState = useAppStore((state) => state.syncAppState)
   const inConversationPage = useAppStore((state) => state.inConversationPage)
-  const actions = TOOLBAR_ACTIONS[inConversationPage ? 'conversation' : 'screenshot']
+  const inAssessmentPage = useAppStore((state) => state.inAssessmentPage)
+  const actions =
+    TOOLBAR_ACTIONS[inAssessmentPage ? 'assessment' : inConversationPage ? 'conversation' : 'screenshot']
   const visibleCount = useVisibleActionCount(barRef, actions.length)
 
   // This window's store is its own copy, so the state main pushes has to be

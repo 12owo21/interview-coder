@@ -31,7 +31,7 @@ export type ToolbarAction = {
   label: string
 }
 
-/** Shown in both modes, after each mode's own buttons */
+/** Shared window controls; assessment currently shows only these buttons. */
 const COMMON_ACTIONS: ToolbarAction[] = [
   { action: 'ignoreOrEnableMouse', Icon: MousePointer2, label: '切换鼠标穿透' },
   { action: 'pageUp', Icon: ChevronUp, label: '向上翻页' },
@@ -51,7 +51,8 @@ const COMMON_ACTIONS: ToolbarAction[] = [
  * hides the toolbar, leaving no way to click the window back. So is 清空对话:
  * a hover-triggered button must not be able to wipe the conversation.
  */
-export const TOOLBAR_ACTIONS: Record<AppMode, ToolbarAction[]> = {
+export const TOOLBAR_ACTIONS: Record<AppMode | 'assessment', ToolbarAction[]> = {
+  assessment: COMMON_ACTIONS,
   screenshot: [
     { action: 'takeScreenshot', Icon: Camera, label: '截图解题（新开对话）' },
     { action: 'appendScreenshot', Icon: ImagePlus, label: '追加截图' },

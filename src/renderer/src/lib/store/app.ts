@@ -4,6 +4,7 @@ interface AppState {
   ignoreMouse: boolean
   /** 对话模式's page is on screen; the toolbar window shows that mode's buttons */
   inConversationPage: boolean
+  inAssessmentPage: boolean
 }
 
 interface AppStore extends AppState {
@@ -15,7 +16,8 @@ interface AppStore extends AppState {
 
 const defaultState: AppState = {
   ignoreMouse: false,
-  inConversationPage: false
+  inConversationPage: false,
+  inAssessmentPage: false
 }
 
 export const useAppStore = create<AppStore>()((set) => ({
@@ -27,6 +29,10 @@ export const useAppStore = create<AppStore>()((set) => ({
     set((state) => ({ ignoreMouse: !state.ignoreMouse }))
   },
   syncAppState: (state) => {
-    set({ ignoreMouse: state.ignoreMouse, inConversationPage: state.inConversationPage })
+    set({
+      ignoreMouse: state.ignoreMouse,
+      inConversationPage: state.inConversationPage,
+      inAssessmentPage: state.inAssessmentPage
+    })
   }
 }))

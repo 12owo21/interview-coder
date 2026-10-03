@@ -16,6 +16,7 @@ applyTheme(useSettingsStore.getState().theme)
 if (!window.location.hash || window.location.hash === '#/') {
   const { lastMode } = useSettingsStore.getState()
   if (lastMode === 'conversation') window.location.hash = '#/conversation'
+  if (lastMode === 'assessment') window.location.hash = '#/assessment'
 }
 
 // The capture-region picker is a throwaway window per screen: it must not run

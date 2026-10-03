@@ -4,12 +4,14 @@ import { toast } from 'sonner'
 import { useSettingsStore, type AppMode } from './store/settings'
 import { useAppStore } from './store/app'
 
-export const MODE_PATHS: Record<AppMode, string> = {
+export const MODE_PATHS: Record<AppMode | 'assessment', string> = {
+  assessment: '/assessment',
   screenshot: '/',
   conversation: '/conversation'
 }
 
-export const MODE_NAMES: Record<AppMode, string> = {
+export const MODE_NAMES: Record<AppMode | 'assessment', string> = {
+  assessment: '做题模式',
   screenshot: '截图模式',
   conversation: '对话模式'
 }

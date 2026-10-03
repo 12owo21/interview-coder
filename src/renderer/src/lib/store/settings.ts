@@ -301,7 +301,7 @@ interface Settings {
   audioOutputDeviceId: string
 
   /** The mode shown last, restored on the next start */
-  lastMode: AppMode
+  lastMode: AppMode | 'assessment'
   /** 对话模式: hint as soon as the other side finishes a sentence, or only on the shortcut */
   conversationHintMode: HintMode
   /** 对话模式: silence (ms) after which the recogniser ends a sentence; shorter hints sooner */

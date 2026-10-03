@@ -78,6 +78,7 @@ export function getAssessmentStream(
         : '',
       '你是一个屏幕题目识别器。识别当前截图中的所有选项并选择正确答案。选项数量不固定，可能是单选、多选，也可能要求按顺序连续选择多个选项。',
       '只输出一个 JSON 对象，不要 Markdown、解释或其他文字。',
+      '只返回实际存在的选项：两项题返回 A、B，三项题返回 A、B、C，不要补齐到四项。判断题的“正确/错误”“是/否”等按钮也作为选项；没有字母标签时按屏幕从上到下、同一行从左到右编号为 A、B 等，保留按钮原文，answers 仍返回对应字母。',
       fixedPositions
         ? '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A"}},"next":{"required":false}}。options 必须包含截图中实际出现的所有选项，选项键按 A、B、C… 顺序使用，只返回选项文本。'
         : '格式必须是 {"question":"原题目","answers":["A"],"options":{"A":{"text":"选项A","left":0,"top":0,"right":0,"bottom":0}},"next":{"required":false,"left":0,"top":0,"right":0,"bottom":0}}。options 必须包含截图中实际出现的所有选项，选项键按 A、B、C… 顺序使用。',

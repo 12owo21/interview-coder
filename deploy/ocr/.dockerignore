@@ -1,0 +1,6 @@
+.env*
+*.log
+__pycache__
+README.md
+verification.json
+sample.png

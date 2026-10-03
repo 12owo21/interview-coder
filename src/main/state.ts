@@ -16,7 +16,8 @@ ipcMain.handle('updateAppState', (_event, next: Partial<AppState>) => {
   Object.assign(state, next)
   if (
     state.inSettingsPage !== before.inSettingsPage ||
-    state.inConversationPage !== before.inConversationPage
+    state.inConversationPage !== before.inConversationPage ||
+    state.inAssessmentPage !== before.inAssessmentPage
   ) {
     onPageChange?.()
   }
@@ -30,6 +31,8 @@ export const state = {
   inCoderPage: false,
   /** 对话模式's page is on screen */
   inConversationPage: false,
+  /** 做题模式's page is on screen; its toolbar only exposes common actions */
+  inAssessmentPage: false,
   /**
    * Whether the settings page is on screen. Click-through is suspended there:
    * every control needed to turn it back off lives on that page, so applying it
@@ -41,7 +44,7 @@ export const state = {
 
 export type AppState = typeof state
 
-/** One of the two mode pages is on screen, where the shortcuts act */
+/** One of the mode pages is on screen, where the shortcuts act */
 export function inModePage(): boolean {
-  return state.inCoderPage || state.inConversationPage
+  return state.inCoderPage || state.inConversationPage || state.inAssessmentPage
 }

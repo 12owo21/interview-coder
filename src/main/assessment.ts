@@ -41,7 +41,7 @@ type ParsedAssessment = Omit<
   'imageSize' | 'fullImageSize' | 'physicalScreenSize' | 'captureOffset'
 >
 
-function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
+function parseResult(raw: string, requireCoordinates: boolean): ParsedAssessment {
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('模型没有返回 JSON')
   const value = JSON.parse(match[0]) as {
@@ -76,17 +76,8 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
     throw new Error('模型返回的答案不能重复')
   }
   const options = value.options
-  if (!options && requireOptions) throw new Error('模型没有返回选项信息')
-  if (!options) {
-    return {
-      raw,
-      question: value.question,
-      optionTexts: {},
-      answer: answers[0],
-      answers,
-      options: {},
-      next: null
-    }
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new Error('模型没有返回有效的选项信息')
   }
   const letters = Object.keys(options).sort()
   if (letters.length === 0 || letters.some((letter) => !/^[A-Z]$/.test(letter))) {
@@ -102,11 +93,12 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
     }
   }
   const optionTexts = Object.fromEntries(
-    (['A', 'B', 'C', 'D'] as const).map((letter) => [letter, options[letter].text.trim()])
+    letters.map((letter) => [letter, options[letter].text.trim()])
   ) as Record<string, string>
   const normalizedOptions = Object.fromEntries(
     letters.map((letter) => {
       const point = options[letter]
+      if (!requireCoordinates) return [letter, { x: 0, y: 0 }]
       if ('left' in point) {
         const values = [point.left, point.top, point.right, point.bottom]
         if (!values.every(Number.isInteger) || point.right <= point.left || point.bottom <= point.top) {
@@ -117,7 +109,6 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
           y: Math.round((point.top + point.bottom) / 2)
         }]
       }
-      if (!requireOptions) return [letter, { x: 0, y: 0 }]
       if (!Number.isInteger(point.x) || !Number.isInteger(point.y)) {
         throw new Error(`模型返回的选项 ${letter} 坐标无效`)
       }
@@ -127,7 +118,7 @@ function parseResult(raw: string, requireOptions: boolean): ParsedAssessment {
   const nextValue = value.next
   let next: ParsedAssessment['next'] = null
   if (nextValue?.required === true) {
-    if (requireOptions) {
+    if (requireCoordinates) {
       const rectValues = [nextValue.left, nextValue.top, nextValue.right, nextValue.bottom]
       if (!rectValues.every((item) => Number.isInteger(item)) ||
           (nextValue.right as number) <= (nextValue.left as number) ||
@@ -233,7 +224,7 @@ export async function analyzeAssessmentScreenshot(
     )
     if (outcome.status === 'failed') throw outcome.error
     if (outcome.status === 'aborted') return false
-    const parsed = parseResult(outcome.text, !fixedPositions || settings.assessmentMemoryEnabled)
+    const parsed = parseResult(outcome.text, !fixedPositions)
     // The model sees the cropped image. Convert its points back to the full
     // captured display image before the future click step consumes them.
     const result: AssessmentResult = {
