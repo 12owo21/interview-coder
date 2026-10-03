@@ -82,6 +82,10 @@ const api = {
   clickScreenPoint: (point: { x: number; y: number }) =>
     ipcRenderer.invoke('click-screen-point', point) as Promise<void>,
   analyzeAssessment: () => ipcRenderer.invoke('assessment:analyze') as Promise<void>,
+  onAssessmentRawChunk: (callback: (chunk: string) => void) => {
+    ipcRenderer.on('assessment-raw-chunk', (_event, chunk: string) => callback(chunk))
+  },
+  removeAssessmentRawChunkListener: () => ipcRenderer.removeAllListeners('assessment-raw-chunk'),
   onAssessmentResult: (callback: (result: AssessmentResult) => void) => {
     ipcRenderer.on('assessment-result', (_event, result: AssessmentResult) => callback(result))
   },

@@ -24,6 +24,7 @@ export default function AssessmentPage() {
   const [message, setMessage] = useState('请输入屏幕坐标，例如：500,300')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<AssessmentResult | null>(null)
+  const [rawOutput, setRawOutput] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -50,6 +51,9 @@ export default function AssessmentPage() {
   }, [])
 
   useEffect(() => {
+    window.api.onAssessmentRawChunk((chunk) => {
+      setRawOutput((previous) => previous + chunk)
+    })
     window.api.onAssessmentResult((next) => {
       setResult(next)
       setError(null)
@@ -63,7 +67,10 @@ export default function AssessmentPage() {
       setMessage(`已按顺序点击 ${answers.join(' → ')}${nextClicked ? '，已点击下一步' : ''}（最后：${x}, ${y}）`)
       setBusy(false)
     })
-    window.api.onAssessmentLoadingStart(() => setBusy(true))
+    window.api.onAssessmentLoadingStart(() => {
+      setBusy(true)
+      setRawOutput('')
+    })
     window.api.onAssessmentLoadingEnd(() => setBusy(false))
     window.api.onAssessmentLoopStarted(() => {
       setBusy(true)
@@ -74,6 +81,7 @@ export default function AssessmentPage() {
       setMessage('做题循环已停止')
     })
     return () => {
+      window.api.removeAssessmentRawChunkListener()
       window.api.removeAssessmentResultListener()
       window.api.removeAssessmentErrorListener()
       window.api.removeAssessmentClickedListener()
@@ -143,6 +151,7 @@ export default function AssessmentPage() {
             onClick={() => {
               setError(null)
               setResult(null)
+              setRawOutput('')
               void window.api.analyzeAssessment()
             }}
           >
@@ -154,6 +163,18 @@ export default function AssessmentPage() {
               {JSON.stringify(result, null, 2)}
             </pre>
           )}
+          <div className="mt-4">
+            <h2 id="assessment-raw-output-label" className="mb-2 text-sm font-medium">
+              AI 原始输出
+            </h2>
+            <pre
+              aria-labelledby="assessment-raw-output-label"
+              tabIndex={0}
+              className="max-h-64 min-h-24 overflow-auto whitespace-pre-wrap break-all rounded-md border border-app-border bg-black/10 p-3 text-xs select-text"
+            >
+              {rawOutput || '等待 AI 输出…'}
+            </pre>
+          </div>
         </section>
       </main>
     </div>

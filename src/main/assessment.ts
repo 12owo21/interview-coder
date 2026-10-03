@@ -229,7 +229,7 @@ export async function analyzeAssessmentScreenshot(
     const outcome = await consumeStream(
       (signal) => getAssessmentStream(messages, signal, fixedPositions, personalityPrompt),
       controller,
-      () => {}
+      (chunk) => sendAssessmentEvent('assessment-raw-chunk', chunk)
     )
     if (outcome.status === 'failed') throw outcome.error
     if (outcome.status === 'aborted') return false

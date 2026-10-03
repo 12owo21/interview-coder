@@ -29,6 +29,17 @@ function normalize(value: string): string {
   return value.normalize('NFKC').replace(/\s+/g, ' ').trim().toLocaleLowerCase()
 }
 
+/** Strip an explicit question number without dropping numbers within the question. */
+function stripQuestionNumber(value: string): string {
+  const question = value.trim()
+  const number = '[0-9０-９一二三四五六七八九十百千零〇两]+'
+  const prefix = new RegExp(
+    `^(?:第\\s*${number}\\s*题\\s*[.．、:：)）]?|[（(【\\[]\\s*${number}\\s*[）)】\\]]\\s*[.．、:：]?|${number}\\s*(?:[.．](?![0-9０-９])|[、:：)）]))\\s*`,
+    'u'
+  )
+  return question.replace(prefix, '').trimStart() || question
+}
+
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
@@ -64,13 +75,15 @@ export function getAssessmentMemoryContext(): string {
 export function addAssessmentMemory(input: AssessmentMemoryInput): AssessmentMemoryRecord | null {
   if (!enabled) return null
   if (!session) session = createSession()
+  const question = stripQuestionNumber(input.question)
   const optionEntries = Object.entries(input.options).sort(([a], [b]) => a.localeCompare(b))
   const optionValues = optionEntries.map(([letter, text]) => `${letter}=${normalize(text)}`)
-  const stemKey = hash(normalize(input.question))
+  const stemKey = hash(normalize(question))
   const exactQuestionKey = hash([stemKey, ...optionValues].join('\n'))
   const contentQuestionKey = hash([stemKey, ...optionValues.slice().sort()].join('\n'))
   const record: AssessmentMemoryRecord = {
     ...input,
+    question,
     index: session.records.length + 1,
     createdAt: Date.now(),
     stemKey,
