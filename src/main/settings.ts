@@ -2,6 +2,7 @@ import { app, dialog, ipcMain } from 'electron'
 import type { CaptureRegion } from '../shared/capture-region'
 import type { ApiProfile, AppMode } from '../shared/api-profile'
 import type { HintMode } from '../shared/conversation'
+import { DEFAULT_OCR_FILTER_MARGINS, normalizeOcrFilterMargins } from '../shared/ocr'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
 import { setAssessmentMemoryEnabled } from './assessment-memory'
 
@@ -18,6 +19,9 @@ ipcMain.handle('getAppSettings', () => {
 
 ipcMain.handle('updateAppSettings', (_event, _settings) => {
   Object.assign(settings, _settings)
+  if ('ocrFilterMargins' in _settings) {
+    settings.ocrFilterMargins = normalizeOcrFilterMargins(_settings.ocrFilterMargins)
+  }
   if ('assessmentMemoryEnabled' in _settings) {
     setAssessmentMemoryEnabled(settings.assessmentMemoryEnabled)
   }
@@ -87,6 +91,7 @@ export const settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
   assessmentPersonalityPrompt: DEFAULT_ASSESSMENT_PERSONALITY_PROMPT,
   /** Use user-configured screen coordinates instead of model-provided boxes. */
   assessmentFixedClick: false,

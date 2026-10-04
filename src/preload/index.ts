@@ -10,9 +10,12 @@ import type { TranscriptionOptions } from '../main/transcription'
 import type { ConversationSnapshot, HintCard, Utterance } from '../shared/conversation'
 import type { KnowledgeDoc, KnowledgeImportResult, KnowledgePatch } from '../shared/knowledge'
 import type { AssessmentResult } from '../main/assessment'
+import type { LocalOcrStatus, OcrResult } from '../shared/ocr'
 
 // Custom APIs for renderer
 const api = {
+  getLocalOcrStatus: () => ipcRenderer.invoke('ocr:status') as Promise<LocalOcrStatus>,
+  testLocalOcrImage: () => ipcRenderer.invoke('ocr:test-image') as Promise<OcrResult | null>,
   // Get the installed app version (package.json version at build time)
   getAppVersion: () => ipcRenderer.invoke('getAppVersion') as Promise<string>,
   // Get app settings

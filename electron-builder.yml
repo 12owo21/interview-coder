@@ -2,17 +2,28 @@ appId: com.electron.app
 productName: 截屏解题助手
 directories:
   buildResources: build
+beforePack: ./scripts/check-ocr-assets.cjs
 files:
-  - '!**/.vscode/*'
-  - '!src/*'
-  - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
-  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
-  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - out/**
+  - resources/icon.png
+  - package.json
+  - '!node_modules/onnxruntime-node/bin/napi-v6/linux/**'
+  - '!node_modules/onnxruntime-node/bin/napi-v6/*/!(${arch})/**'
+extraResources:
+  - from: resources/ocr
+    to: ocr
 asarUnpack:
   - resources/**
+  - node_modules/onnxruntime-node/bin/**
+  - node_modules/@napi-rs/canvas*/**
 win:
   executableName: 截屏解题助手
+  extraResources:
+    - from: resources/ocr-runtime/win32/${arch}
+      to: app.asar.unpacked/node_modules/onnxruntime-node/bin/napi-v6/win32/${arch}
+      filter:
+        - '*.dll'
+        - 'LICENSE*.rtf'
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

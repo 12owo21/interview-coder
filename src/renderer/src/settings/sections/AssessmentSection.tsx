@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import { useSettingsStore } from '@/lib/store/settings'
 import { Field, SettingsCard } from '../components'
+import { LocalOcrPanel } from '../LocalOcrPanel'
 
 export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: string) => void }) {
   const {
@@ -235,6 +236,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
           </div>
         )}
       </div>
+      <LocalOcrPanel />
     </SettingsCard>
   )
 }

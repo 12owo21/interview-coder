@@ -1,0 +1,12 @@
+Chinese PP-OCRv4 mobile detection and recognition models originate from PaddleOCR.
+Copyright PaddlePaddle Authors. Licensed under the Apache License, Version 2.0.
+https://github.com/PaddlePaddle/PaddleOCR
+
+The ONNX files are distributed by RapidOCR (rapidocr-onnxruntime 1.4.4).
+https://github.com/RapidAI/RapidOCR
+The dictionary keys.txt was extracted without modification from the recognition
+model's character metadata. Source information and SHA-256 hashes are recorded
+in manifest.json. The model weights have not been modified.
+
+sample.png and sample-expected.json are synthetic screenshots generated for
+this application's OCR diagnostic, not actual assessment screenshots.

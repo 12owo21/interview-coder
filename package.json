@@ -61,6 +61,8 @@
     "katex": "^0.16.47",
     "lucide-react": "^0.540.0",
     "mammoth": "^1.13.0",
+    "onnxruntime-node": "1.23.2",
+    "ppu-paddle-ocr": "6.6.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",

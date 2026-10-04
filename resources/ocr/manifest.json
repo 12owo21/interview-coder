@@ -1,0 +1,25 @@
+{
+  "model": "PP-OCRv4 mobile Chinese",
+  "source": "https://pypi.org/project/rapidocr-onnxruntime/1.4.4/",
+  "license": "Apache-2.0",
+  "files": [
+    {
+      "file": "det.onnx",
+      "source": "rapidocr-onnxruntime==1.4.4/models/ch_PP-OCRv4_det_infer.onnx",
+      "sha256": "d2a7720d45a54257208b1e13e36a8479894cb74155a5efe29462512d42f49da9",
+      "bytes": 4745517
+    },
+    {
+      "file": "rec.onnx",
+      "source": "rapidocr-onnxruntime==1.4.4/models/ch_PP-OCRv4_rec_infer.onnx",
+      "sha256": "48fc40f24f6d2a207a2b1091d3437eb3cc3eb6b676dc3ef9c37384005483683b",
+      "bytes": 10857958
+    },
+    {
+      "file": "keys.txt",
+      "source": "character metadata embedded in rec.onnx",
+      "sha256": "28b2362ad4ab2dc38769aa72feb535e3a9ddb3fd2a7585a05920e6393b1dc7f7",
+      "bytes": 26249
+    }
+  ]
+}

@@ -38,11 +38,19 @@ import './assessment'
 import { createWindow } from './main-window'
 import { initAutoUpdater } from './auto-updater'
 import { applyDockVisibility } from './settings'
+import { startLocalOcrService, stopLocalOcrService } from './ocr'
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const ocrTestReport = process.argv.find((arg) => arg.startsWith('--ocr-self-test='))?.slice('--ocr-self-test='.length)
+  if (ocrTestReport) {
+    const { runLocalOcrSelfTest } = await import('./ocr/self-test')
+    await runLocalOcrSelfTest(ocrTestReport)
+    return
+  }
+  void startLocalOcrService().catch((error) => console.error('[local-ocr]', error))
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
@@ -93,6 +101,8 @@ app.whenReady().then(() => {
     }
   })
 })
+
+app.on('before-quit', stopLocalOcrService)
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

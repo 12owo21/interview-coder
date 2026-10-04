@@ -18,6 +18,11 @@ import { createProfile, type ApiProfile } from '../api-profiles'
 import type { CaptureRegion } from '../../../../shared/capture-region'
 import type { AppMode } from '../../../../shared/api-profile'
 import type { HintMode } from '../../../../shared/conversation'
+import {
+  DEFAULT_OCR_FILTER_MARGINS,
+  normalizeOcrFilterMargins,
+  type OcrFilterMargins
+} from '../../../../shared/ocr'
 
 export type { Theme }
 export type { ApiProfile }
@@ -226,6 +231,7 @@ interface Settings {
   /** The profile used by the experimental 做题 mode */
   assessmentProfileId: string
   assessmentMemoryEnabled: boolean
+  ocrFilterMargins: OcrFilterMargins
   assessmentPersonalityPrompt: string
   assessmentFixedClick: boolean
   assessmentFixedPositions: Record<string, { x: number; y: number } | null>
@@ -378,6 +384,7 @@ const defaultSettings: Settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
   assessmentPersonalityPrompt:
     '我是一个积极、活泼、开朗、乐于沟通、具有团队合作精神的人，做选择时倾向于表现出自信、稳定、友善和积极主动。',
   assessmentFixedClick: false,
@@ -780,6 +787,7 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       merge: (persisted, current) => {
         const state = { ...current, ...(persisted as Partial<Settings>) }
+        state.ocrFilterMargins = normalizeOcrFilterMargins(state.ocrFilterMargins)
         // Rebuild the presets on every load, so ones added in a later version
         // show up for existing users; the ones the user deleted stay out
         const persistedScenes = Array.isArray(state.scenes) ? state.scenes : []
