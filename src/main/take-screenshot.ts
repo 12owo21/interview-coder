@@ -50,16 +50,16 @@ export function findScreenSource(
  * screen that is no longer connected is passed over, keeping the choice for
  * when it is plugged back in.
  */
-function getCaptureTarget(): { display: Display; region: RegionRect | null } {
+function getCaptureTarget(target = settings): { display: Display; region: RegionRect | null } {
   const displays = screen.getAllDisplays()
   const byId = (id: string): Display | undefined => displays.find((d) => String(d.id) === id)
 
-  const region = settings.captureRegion
+  const region = target.captureRegion
   const regionDisplay = region && byId(region.displayId)
   if (regionDisplay) return { display: regionDisplay, region }
 
   const display =
-    byId(settings.captureScreen) ?? screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    byId(target.captureScreen) ?? screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
   return { display, region: null }
 }
 
@@ -68,6 +68,8 @@ export function takeScreenshot(): Promise<string | void> {
 }
 
 export interface ScreenshotCapture {
+  displayId: string
+  capturedAt: number
   data: string
   /** Size of the image sent to the model, in PNG pixels. */
   imageWidth: number
@@ -86,18 +88,21 @@ export interface ScreenshotCapture {
 }
 
 /** Capture the same image as takeScreenshot(), while retaining coordinate metadata. */
-export function takeScreenshotWithMetadata(): Promise<ScreenshotCapture | undefined> {
+export function takeScreenshotWithMetadata(target?: { captureScreen: string; captureRegion: typeof settings.captureRegion }): Promise<ScreenshotCapture | undefined> {
   const mainWindow = global.mainWindow
   if (!mainWindow || mainWindow.isDestroyed()) return Promise.resolve(undefined)
 
-  const { display, region } = getCaptureTarget()
+  if (target && target.captureScreen !== 'cursor' && !screen.getAllDisplays().some((display) => String(display.id) === target.captureScreen)) return Promise.resolve(undefined)
+  const { display, region } = getCaptureTarget(target ? { ...settings, ...target } : settings)
   const { width, height } = display.size
 
   return desktopCapturer
     .getSources({ types: ['screen'], thumbnailSize: { width, height } })
     .then((sources) => {
       if (sources.length === 0) return undefined
-      const { thumbnail } = findScreenSource(sources, display) ?? sources[0]
+      const source = findScreenSource(sources, display)
+      if (!source) return undefined
+      const { thumbnail } = source
       const crop = region ? regionToPixels(region, thumbnail.getSize()) : null
       const image = crop ? thumbnail.crop(crop) : thumbnail
       const size = image.getSize()
@@ -105,6 +110,8 @@ export function takeScreenshotWithMetadata(): Promise<ScreenshotCapture | undefi
       const physicalSize = settingsResolution(display)
       const scale = process.platform === 'darwin' ? 1 : display.scaleFactor
       return {
+        displayId: String(display.id),
+        capturedAt: Date.now(),
         data: image.toPNG().toString('base64'),
         imageWidth: size.width,
         imageHeight: size.height,

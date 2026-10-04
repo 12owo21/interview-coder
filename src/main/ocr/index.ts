@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, utilityProcess, type UtilityProcess } from 'elect
 import { readFile, stat, access } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { LocalOcrStatus, OcrResult, OcrWorkerReply } from '../../shared/ocr'
+import type { LocalOcrStatus, OcrResult, OcrWorkerReply, OcrFilterMargins } from '../../shared/ocr'
 import { filterOcrResult, normalizeOcrFilterMargins } from '../../shared/ocr'
 import { settings } from '../settings'
 import { inspectOcrPng, MAX_OCR_BYTES } from './image'
@@ -131,12 +131,12 @@ export function startLocalOcrService(options: { idleReleaseMs?: number } = {}): 
   return starting
 }
 
-export async function recognizeLocalPng(png: Uint8Array, signal?: AbortSignal): Promise<OcrResult> {
+export async function recognizeLocalPng(png: Uint8Array, signal?: AbortSignal, filterMargins?: OcrFilterMargins): Promise<OcrResult> {
   if (busy) throw new Error('OCR 正在识别，请稍后重试')
   if (signal?.aborted) throw new Error('OCR 识别已取消')
   inspectOcrPng(png)
   // Snapshot the settings so an edit during inference applies to the next request.
-  const margins = normalizeOcrFilterMargins(settings.ocrFilterMargins)
+  const margins = normalizeOcrFilterMargins(filterMargins ?? settings.ocrFilterMargins)
   busy = true
   clearIdle()
   try {

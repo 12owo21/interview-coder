@@ -1,35 +1,14 @@
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/explicit-function-return-type */
 const assert = require('node:assert/strict')
-const { readFileSync } = require('node:fs')
-const { resolve } = require('node:path')
 const { test } = require('node:test')
-const { runInNewContext } = require('node:vm')
-const ts = require('typescript')
+const { createLoader } = require('./helpers/load-ts.cjs')
+const load = createLoader()
+const { AssessmentRunner } = load('src/main/assessment/runner.ts')
+const { AssessmentController } = load('src/main/assessment/controller.ts')
+const { AssessmentMemoryService } = load('src/main/assessment/memory-service.ts')
+const { AssessmentClickExecutor } = load('src/main/assessment/click-executor.ts')
 
-// Exercise the real single-question flow without calling a model or moving the mouse.
-function loadSource(file, dependencies, globals = {}) {
-  const filename = resolve(__dirname, '..', 'src/main', file)
-  const code = ts.transpileModule(readFileSync(filename, 'utf8'), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-  }).outputText
-  const exports = {}
-  runInNewContext(
-    code,
-    {
-      exports,
-      require: (id) => {
-        if (Object.hasOwn(dependencies, id)) return dependencies[id]
-        throw new Error(`Unexpected dependency: ${id}`)
-      },
-      AbortController,
-      setTimeout,
-      clearTimeout,
-      ...globals
-    },
-    { filename }
-  )
-  return exports
-}
-
+// Keep the original 24 behavioral cases while testing the extracted production flow.
 async function runQuestion(count, fixed, memoryEnabled, change = () => {}) {
   const events = []
   const clicks = []
@@ -49,63 +28,64 @@ async function runQuestion(count, fixed, memoryEnabled, change = () => {}) {
     next: { required: false }
   }
   change(response)
-  const memory = loadSource('assessment-memory.ts', { 'node:crypto': require('node:crypto') })
-  const stream = loadSource('stream.ts', {})
-  const assessment = loadSource(
-    'assessment.ts',
-    {
-      electron: { ipcMain: { handle() {} } },
-      './settings': {
-        DEFAULT_ASSESSMENT_PERSONALITY_PROMPT: '开朗',
-        getAssessmentProfile: () => ({ apiKey: 'test-key' }),
-        settings: {
-          assessmentMemoryEnabled: memoryEnabled,
-          assessmentPersonalityPrompt: '开朗',
-          assessmentFixedClick: fixed,
-          assessmentFixedPositions: Object.fromEntries(
-            letters.map((letter) => [letter, { x: 100, y: 200 }])
-          )
-        }
-      },
-      './take-screenshot': {
-        takeScreenshotWithMetadata: async () => ({
-          data: 'mock-image',
-          imageWidth: 800,
-          imageHeight: 1200,
-          fullWidth: 800,
-          fullHeight: 1200,
-          physicalWidth: 800,
-          physicalHeight: 1200,
-          offsetX: 0,
-          offsetY: 0,
-          originX: 0,
-          originY: 0
-        })
-      },
-      './ai': {
-        getAssessmentStream: async function* () {
-          yield JSON.stringify(response)
-        }
-      },
-      './stream': stream,
-      './click': { clickScreenPoint: async (point) => clicks.push({ ...point }) },
-      './assessment-memory': memory
+  const memory = new AssessmentMemoryService()
+  const config = {
+    profile: { apiKey: 'test-key' },
+    strategy: fixed ? 'fixed' : 'model',
+    preview: false,
+    showDebug: false,
+    fixedPositions: Object.fromEntries(letters.map((key) => [key, { x: 100, y: 200 }])),
+    nextPosition: null,
+    memoryEnabled,
+    personality: '开朗',
+    margins: { top: 100, bottom: 100, left: 100, right: 100 },
+    captureScreen: 'cursor',
+    captureRegion: null
+  }
+  const runner = new AssessmentRunner({
+    capture: async () => ({
+      data: 'mock',
+      imageWidth: 800,
+      imageHeight: 1200,
+      fullWidth: 800,
+      fullHeight: 1200,
+      physicalWidth: 800,
+      physicalHeight: 1200,
+      originX: 0,
+      originY: 0,
+      offsetX: 0,
+      offsetY: 0,
+      displayId: '1',
+      capturedAt: Date.now()
+    }),
+    ocr: async () => {
+      throw new Error('Legacy and fixed modes must not call OCR')
     },
-    {
-      global: {
-        mainWindow: {
-          isDestroyed: () => false,
-          webContents: { send: (channel, value) => events.push({ channel, value }) }
-        }
-      }
+    ask: async () => JSON.stringify(response),
+    memory,
+    executor: new AssessmentClickExecutor(
+      async (point) => clicks.push({ ...point }),
+      async () => {}
+    ),
+    guard: { prepare: () => ({ check: async () => {} }) },
+    assertClickSupported() {
+      return undefined
+    }
+  })
+  const controller = new AssessmentController(
+    runner,
+    () => config,
+    (state) => {
+      if (state.result) events.push({ channel: 'assessment-result', value: state.result })
+      if (state.error) events.push({ channel: 'assessment-error', value: state.error })
     }
   )
   return {
-    completed: await assessment.analyzeAssessmentScreenshot(),
+    completed: await controller.runOnce(),
     events,
     clicks,
     letters,
-    memory: memory.getAssessmentMemoryContext()
+    memory: memory.snapshot().context
   }
 }
 

@@ -66,13 +66,14 @@ export function getAssessmentStream(
   messages: ModelMessage[],
   abortSignal?: AbortSignal,
   fixedPositions = false,
-  personalityPrompt = ''
+  personalityPrompt = '',
+  request?: { profile: ApiProfile; system: string }
 ) {
-  const profile = getAssessmentProfile()
+  const profile = request?.profile ?? getAssessmentProfile()
   const openai = createProvider(profile)
   const { textStream } = streamText({
     model: openai.chat(getModel(profile)),
-    system: [
+    system: request?.system ?? [
       personalityPrompt.trim()
         ? `被测者的个人性格设定如下：\n<personality>\n${personalityPrompt.trim()}\n</personality>\n请依据该性格作答，并与本次测评前后的答案保持一致。`
         : '',

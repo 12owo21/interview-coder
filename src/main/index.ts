@@ -44,6 +44,12 @@ import { startLocalOcrService, stopLocalOcrService } from './ocr'
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
+  const assessmentTestReport = process.argv.find((arg) => arg.startsWith('--assessment-self-test='))?.slice('--assessment-self-test='.length)
+  if (assessmentTestReport) {
+    const { runAssessmentSelfTest } = await import('./assessment/self-test')
+    await runAssessmentSelfTest(assessmentTestReport)
+    return
+  }
   const ocrTestReport = process.argv.find((arg) => arg.startsWith('--ocr-self-test='))?.slice('--ocr-self-test='.length)
   if (ocrTestReport) {
     const { runLocalOcrSelfTest } = await import('./ocr/self-test')

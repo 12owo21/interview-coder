@@ -231,6 +231,9 @@ interface Settings {
   /** The profile used by the experimental 做题 mode */
   assessmentProfileId: string
   assessmentMemoryEnabled: boolean
+  assessmentOcrEnabled: boolean
+  assessmentOcrPreviewOnly: boolean
+  assessmentShowOcrDebug: boolean
   ocrFilterMargins: OcrFilterMargins
   assessmentPersonalityPrompt: string
   assessmentFixedClick: boolean
@@ -384,6 +387,9 @@ const defaultSettings: Settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  assessmentOcrEnabled: false,
+  assessmentOcrPreviewOnly: true,
+  assessmentShowOcrDebug: false,
   ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
   assessmentPersonalityPrompt:
     '我是一个积极、活泼、开朗、乐于沟通、具有团队合作精神的人，做选择时倾向于表现出自信、稳定、友善和积极主动。',

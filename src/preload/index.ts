@@ -9,7 +9,7 @@ import type { CaptureRegion, RegionRect } from '../shared/capture-region'
 import type { TranscriptionOptions } from '../main/transcription'
 import type { ConversationSnapshot, HintCard, Utterance } from '../shared/conversation'
 import type { KnowledgeDoc, KnowledgeImportResult, KnowledgePatch } from '../shared/knowledge'
-import type { AssessmentResult } from '../main/assessment'
+import type { AssessmentResult, AssessmentSnapshot } from '../shared/assessment'
 import type { LocalOcrStatus, OcrResult } from '../shared/ocr'
 
 // Custom APIs for renderer
@@ -84,7 +84,15 @@ const api = {
     ipcRenderer.invoke('setIgnoreMouse', ignore) as Promise<boolean>,
   clickScreenPoint: (point: { x: number; y: number }) =>
     ipcRenderer.invoke('click-screen-point', point) as Promise<void>,
-  analyzeAssessment: () => ipcRenderer.invoke('assessment:analyze') as Promise<void>,
+  analyzeAssessment: () => ipcRenderer.invoke('assessment:analyze') as Promise<boolean>,
+  stopAssessment: () => ipcRenderer.invoke('assessment:stop') as Promise<void>,
+  resetAssessmentMemory: () => ipcRenderer.invoke('assessment:reset-memory') as Promise<void>,
+  getAssessmentSnapshot: () => ipcRenderer.invoke('assessment:get-snapshot') as Promise<AssessmentSnapshot>,
+  onAssessmentSnapshot: (callback: (snapshot: AssessmentSnapshot) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: AssessmentSnapshot): void => callback(snapshot)
+    ipcRenderer.on('assessment-snapshot', listener)
+    return () => ipcRenderer.removeListener('assessment-snapshot', listener)
+  },
   onAssessmentRawChunk: (callback: (chunk: string) => void) => {
     ipcRenderer.on('assessment-raw-chunk', (_event, chunk: string) => callback(chunk))
   },

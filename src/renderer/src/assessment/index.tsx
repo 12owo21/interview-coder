@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input'
 import { AppHeader } from '@/coder/AppHeader'
 import { useSettingsStore } from '@/lib/store/settings'
 import { useAppStore } from '@/lib/store/app'
-import type { AssessmentResult } from '../../../main/assessment'
+import { ASSESSMENT_PHASE_LABELS } from '../../../shared/assessment'
+import { useAssessmentStore } from '@/lib/store/assessment'
+import { OcrDebugPanel } from './OcrDebugPanel'
 
 function parsePoint(value: string): { x: number; y: number } | null {
   const parts = value.split(/[,，\s]+/).filter(Boolean)
@@ -23,10 +25,13 @@ export default function AssessmentPage() {
   const [pointText, setPointText] = useState('')
   const [screenSize, setScreenSize] = useState<string | null>(null)
   const [message, setMessage] = useState('请输入屏幕坐标，例如：500,300')
-  const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<AssessmentResult | null>(null)
-  const [rawOutput, setRawOutput] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [manualBusy, setBusy] = useState(false)
+  const [localError, setError] = useState<string | null>(null)
+  const snapshot = useAssessmentStore((state) => state.snapshot)
+  const busy = manualBusy || Boolean(snapshot?.busy)
+  const result = snapshot?.result
+  const rawOutput = snapshot?.raw ?? ''
+  const error = localError || snapshot?.error
 
   useEffect(() => {
     document.body.style.opacity = opacity.toString()
@@ -66,42 +71,20 @@ export default function AssessmentPage() {
   }, [])
 
   useEffect(() => {
-    window.api.onAssessmentRawChunk((chunk) => {
-      setRawOutput((previous) => previous + chunk)
-    })
-    window.api.onAssessmentResult((next) => {
-      setResult(next)
-      setError(null)
-      setBusy(false)
-    })
-    window.api.onAssessmentError((message) => {
-      setError(message)
-      setBusy(false)
-    })
-    window.api.onAssessmentClicked(({ answers, x, y, nextClicked }) => {
-      setMessage(`已按顺序点击 ${answers.join(' → ')}${nextClicked ? '，已点击下一步' : ''}（最后：${x}, ${y}）`)
-      setBusy(false)
-    })
-    window.api.onAssessmentLoadingStart(() => {
-      setBusy(true)
-      setRawOutput('')
-    })
-    window.api.onAssessmentLoadingEnd(() => setBusy(false))
-    window.api.onAssessmentLoopStarted(() => {
-      setBusy(true)
-      setMessage('做题循环已启动，再次按做题快捷键可停止')
-    })
-    window.api.onAssessmentLoopStopped(() => {
-      setBusy(false)
-      setMessage('做题循环已停止')
-    })
+    const sync = useAssessmentStore.getState().sync
+    const remove = window.api.onAssessmentSnapshot(sync)
+    let mounted = true
+    window.api
+      .getAssessmentSnapshot()
+      .then((value) => {
+        if (mounted) sync(value)
+      })
+      .catch((error) => {
+        if (mounted) setError(String(error))
+      })
     return () => {
-      window.api.removeAssessmentRawChunkListener()
-      window.api.removeAssessmentResultListener()
-      window.api.removeAssessmentErrorListener()
-      window.api.removeAssessmentClickedListener()
-      window.api.removeAssessmentLoadingListeners()
-      window.api.removeAssessmentLoopListeners()
+      mounted = false
+      remove()
     }
   }, [])
 
@@ -160,20 +143,35 @@ export default function AssessmentPage() {
               </Button>
             ))}
           </div>
-          <p className="mt-4 text-xs opacity-60">{message}</p>
+          <p className="mt-4 text-xs opacity-60">{snapshot?.notice || message}</p>
+          <p className="mt-2 text-xs">
+            {snapshot ? ASSESSMENT_PHASE_LABELS[snapshot.phase] : '读取任务状态中…'}
+            {snapshot?.looping ? ' · 循环运行' : ''}
+          </p>
           <Button
             className="mt-4 w-full"
             variant="outline"
             disabled={busy}
             onClick={() => {
               setError(null)
-              setResult(null)
-              setRawOutput('')
-              void window.api.analyzeAssessment()
+              void window.api.analyzeAssessment().catch((error) => setError(String(error)))
             }}
           >
-            {busy ? '分析中…' : '截图并分析（快捷键 Ctrl+Q）'}
+            {busy ? '任务进行中…' : '截图并分析一次'}
           </Button>
+          {busy && (
+            <Button
+              className="mt-2 w-full"
+              variant="outline"
+              onClick={() => void window.api.stopAssessment()}
+            >
+              停止做题
+            </Button>
+          )}
+          <p className="mt-2 text-xs opacity-60">
+            做题快捷键切换循环开始/停止；OCR 预览模式只分析一次。
+          </p>
+          {snapshot?.debug && <OcrDebugPanel debug={snapshot.debug} />}
           {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
           {result && (
             <pre className="mt-4 max-h-64 overflow-auto rounded-md bg-black/10 p-3 text-xs">

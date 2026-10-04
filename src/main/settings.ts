@@ -4,7 +4,12 @@ import type { ApiProfile, AppMode } from '../shared/api-profile'
 import type { HintMode } from '../shared/conversation'
 import { DEFAULT_OCR_FILTER_MARGINS, normalizeOcrFilterMargins } from '../shared/ocr'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
-import { setAssessmentMemoryEnabled } from './assessment-memory'
+import { assessmentMemory } from './assessment-memory'
+
+const settingsListeners = new Set<() => void>()
+export function onSettingsChanged(listener: () => void): void {
+  settingsListeners.add(listener)
+}
 
 export const DEFAULT_ASSESSMENT_PERSONALITY_PROMPT =
   '我是一个积极、活泼、开朗、乐于沟通、具有团队合作精神的人，做选择时倾向于表现出自信、稳定、友善和积极主动。'
@@ -22,9 +27,10 @@ ipcMain.handle('updateAppSettings', (_event, _settings) => {
   if ('ocrFilterMargins' in _settings) {
     settings.ocrFilterMargins = normalizeOcrFilterMargins(_settings.ocrFilterMargins)
   }
-  if ('assessmentMemoryEnabled' in _settings) {
-    setAssessmentMemoryEnabled(settings.assessmentMemoryEnabled)
+  if ('assessmentMemoryEnabled' in _settings || 'assessmentPersonalityPrompt' in _settings) {
+    assessmentMemory.configure(settings.assessmentMemoryEnabled, settings.assessmentPersonalityPrompt.trim() || DEFAULT_ASSESSMENT_PERSONALITY_PROMPT)
   }
+  for (const listener of settingsListeners) listener()
   if ('hideDockIcon' in _settings) {
     applyDockVisibility(settings.hideDockIcon)
   }
@@ -91,6 +97,9 @@ export const settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  assessmentOcrEnabled: false,
+  assessmentOcrPreviewOnly: true,
+  assessmentShowOcrDebug: false,
   ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
   assessmentPersonalityPrompt: DEFAULT_ASSESSMENT_PERSONALITY_PROMPT,
   /** Use user-configured screen coordinates instead of model-provided boxes. */

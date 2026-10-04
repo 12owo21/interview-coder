@@ -112,7 +112,7 @@ export function LocalOcrPanel() {
       </div>
       <p className="text-xs font-light">
         随软件启动，离线识别中文和英文。首次使用时加载模型，空闲 60 秒后释放内存。
-        当前用于识别测试，暂未接入自动点击。
+        可在上方开启“OCR 定位选项”接入做题；这里可单独选择图片测试。
       </p>
       <div className="space-y-2">
         <p className="text-sm font-medium">OCR 边缘过滤</p>
