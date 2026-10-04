@@ -6,10 +6,12 @@ import { AssessmentController } from './controller'
 import { AssessmentClickExecutor } from './click-executor'
 import { AssessmentPageGuard } from './page-guard'
 import { AssessmentMemoryService } from './memory-service'
-import { stripOptionLabel } from './ocr-layout-analyzer'
+import { stripOptionLabel } from './ocr-regions'
 import { recognizeLocalPng, stopLocalOcrService } from '../ocr'
 import type { AssessmentConfig } from './types'
 import type { OcrLayout } from '../../shared/assessment'
+import type { AssessmentRecovery } from './recovery'
+import { wait } from './wait'
 
 /** Opt-in integration diagnostic: real OCR + Chromium input, no external AI or OS input. */
 export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
@@ -81,6 +83,11 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
       captureRegion: null
     }
     let changePage = false
+    let changeButton = false
+    let recoveryRequests = 0
+    let omitNextOnce = false
+    let finishAfterNext = false
+    let nextFinished = false
     const clickTimes: number[] = []
     const runner = new AssessmentRunner({
       capture,
@@ -103,46 +110,88 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
           ...point
         })
         await window.webContents.executeJavaScript('Promise.resolve()')
+        if (finishAfterNext)
+          nextFinished = await window.webContents.executeJavaScript("window.hits.includes('next')")
+        if (changeButton) {
+          changeButton = false
+          await window.webContents.executeJavaScript(
+            "document.getElementById('next').style.background='#99ccff'"
+          )
+        }
       }),
       ask: async (messages, _system, _profile, _signal, chunk) => {
         const part = messages[0].content
         assert.ok(Array.isArray(part) && part[0].type === 'text')
-        const data = JSON.parse(part[0].text) as { captureId: string; ocr: OcrLayout }
-        report.layout = data.ocr
-        const options: Record<string, { text: string; regionIds: string[] }> = {}
-        for (const label of ['A', 'B']) {
-          const group = data.ocr.candidates.find((g) => g.labelHint === label)
-          assert.ok(group, `OCR did not group ${label}: ${JSON.stringify(data.ocr.candidates)}`)
-          options[label] = { regionIds: group.regionIds, text: stripOptionLabel(group.joinedText) }
-          assert.ok(
-            group.regionIds.length >= 2,
-            `Expected a multiline option: ${JSON.stringify(group)}`
-          )
+        const data = JSON.parse(part[0].text) as {
+          captureId: string
+          ocr: OcrLayout
+          recovery?: AssessmentRecovery
         }
+        if (data.recovery) recoveryRequests++
+        report.layout = data.ocr
+        const options: Record<
+          string,
+          { text: string; regionIds: string[]; clickRegionId: string }
+        > = {}
+        // The stub knows this test page's text, but still references real OCR boxes.
+        // It must not depend on any production grouping heuristics.
+        for (const [label, fragments] of [
+          ['A', ['喜欢与朋友', '愿意主动']],
+          ['B', ['喜欢安静', '认真规划']]
+        ] as const) {
+          const rows = fragments.map((fragment) => {
+            const region = data.ocr.regions.find((r) => r.text.includes(fragment))
+            assert.ok(region, `OCR missed ${fragment}: ${JSON.stringify(data.ocr.regions)}`)
+            return region
+          })
+          options[label] = {
+            regionIds: rows.map((r) => r.id),
+            clickRegionId: rows[0].id,
+            text: stripOptionLabel(rows.map((r) => r.text).join('\n'))
+          }
+        }
+        const stem = data.ocr.regions.find((r) => r.text.includes('请选择符合'))
+        assert.ok(stem, 'OCR did not find question')
         const next = data.ocr.regions.find((r) => r.text.replace(/\s/g, '') === '下一步')
         assert.ok(next, 'OCR did not find next')
         const raw = JSON.stringify({
-          schemaVersion: 2,
+          schemaVersion: 3,
           captureId: data.captureId,
           status: 'ok',
-          questionBlockId: data.ocr.blocks[0].id,
-          question: '1. 请选择符合你的选项',
+          questionRegionIds: [stem.id],
+          question: stem.text,
           answers: ['B', 'A'],
           options,
-          next: { required: true, kind: 'next', regionIds: [next.id] }
+          ...(data.recovery
+            ? {
+                selectedAnswers: await window.webContents.executeJavaScript(
+                  "window.hits.filter(id => id !== 'next')"
+                )
+              }
+            : {}),
+          next: omitNextOnce
+            ? { required: false }
+            : { required: true, kind: 'next', clickRegionId: next.id }
         })
+        omitNextOnce = false
         chunk(raw)
-        if (changePage)
+        if (changePage) {
+          changePage = false
           await window.webContents.executeJavaScript(
-            "document.getElementById('stem').textContent='2. 页面已经切换，请不要再点旧位置'"
+            "document.getElementById('stem').textContent='2. 请选择符合你的选项'"
           )
+        }
         return raw
       }
     })
     const controller = new AssessmentController(
       runner,
       () => config,
-      () => undefined
+      () => undefined,
+      async (ms, signal) => {
+        if (finishAfterNext && nextFinished) controller.stop()
+        else await wait(ms, signal)
+      }
     )
     assert.equal(await controller.toggleLoop(), true, controller.getSnapshot().error ?? '')
     assert.deepEqual(await window.webContents.executeJavaScript('window.hits'), [])
@@ -154,18 +203,37 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
     assert.ok(clickTimes[1] - clickTimes[0] >= 500 && clickTimes[2] - clickTimes[1] >= 500)
     assert.ok(memory.snapshot().context.includes('B → A'))
     report.executed = controller.getSnapshot().result
+    await window.webContents.executeJavaScript('window.hits=[]')
     changePage = true
-    assert.equal(await controller.runOnce(), false)
-    assert.match(controller.getSnapshot().error ?? '', /发生变化/)
+    assert.equal(await controller.runOnce(), true, controller.getSnapshot().error ?? '')
     assert.deepEqual(await window.webContents.executeJavaScript('window.hits'), ['B', 'A', 'next'])
+    assert.equal(recoveryRequests, 1)
+    await window.webContents.executeJavaScript('window.hits=[]')
+    changeButton = true
+    assert.equal(await controller.runOnce(), true, controller.getSnapshot().error ?? '')
+    assert.deepEqual(await window.webContents.executeJavaScript('window.hits'), ['B', 'A', 'next'])
+    assert.equal(recoveryRequests, 2)
+    assert.deepEqual(controller.getSnapshot().result?.confirmedSelectedAnswers, ['B'])
+    report.recovered = controller.getSnapshot().result
+    await window.webContents.executeJavaScript('window.hits=[]')
+    const beforeRecords = memory.snapshot().context.match(/题目：/g)?.length ?? 0
+    omitNextOnce = true
+    finishAfterNext = true
+    assert.equal(await controller.toggleLoop(), true, controller.getSnapshot().error ?? '')
+    assert.deepEqual(await window.webContents.executeJavaScript('window.hits'), ['B', 'A', 'next'])
+    assert.equal((memory.snapshot().context.match(/题目：/g)?.length ?? 0) - beforeRecords, 1)
+    assert.equal(recoveryRequests, 3)
+    report.missedNextRecovered = controller.getSnapshot().result
     report.checks = [
       'real-local-OCR',
-      'multiline-grouping',
+      'model-selected-multiline-regions',
       'preview-zero-clicks',
       'preview-zero-memory',
       'ordered-DOM-clicks-B-A-next',
       '500ms-spacing',
-      'page-change-zero-extra-clicks',
+      'page-change-recapture-and-reanalyze',
+      'button-color-recovery-without-repeat-clicks',
+      'missed-next-recovery-without-reselecting-or-duplicate-memory',
       'session-memory'
     ]
     report.passed = true

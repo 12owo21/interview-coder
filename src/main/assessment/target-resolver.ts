@@ -20,12 +20,9 @@ export class AssessmentTargetResolver {
       let point: Point | undefined = item.point
       let regionId: string | undefined
       if (config.strategy === 'ocr') {
-        const candidates = layout!.regions
-          .filter((r) => item.regionIds?.includes(r.id) && !/^[A-Z]$/.test(r.text.trim()))
-          .sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left)
-        const region = candidates[0]
-        if (!region || region.score < 0.8)
-          throw new Error(`无法可靠定位${key ?? '下一步'}，文字框置信度不足`)
+        const region = layout?.regions.find((r) => r.id === item.clickRegionId)
+        if (!region || !item.regionIds?.includes(region.id))
+          throw new Error(`无法定位${key ?? '下一步'}，点击框必须属于本次引用的 OCR 文字框`)
         regionId = region.id
         point = {
           x: (region.box.left + region.box.right) / 2,

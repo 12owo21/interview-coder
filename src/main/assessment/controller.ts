@@ -3,6 +3,8 @@ import type { AssessmentSnapshot } from '../../shared/assessment'
 import type { AssessmentConfig } from './types'
 import type { AssessmentRunner } from './runner'
 import { checkAborted, wait } from './wait'
+import { AssessmentPageChangedError } from './recovery'
+import { AssessmentRetrySession, MAX_ASSESSMENT_RETRIES } from './retry-session'
 
 export class AssessmentController {
   private abort: AbortController | null = null
@@ -57,7 +59,8 @@ export class AssessmentController {
     const controller = new AbortController()
     this.abort = controller
     let completed = false
-    let previousPage: string | undefined
+    const retry = new AssessmentRetrySession()
+    let verificationOnly = false
     this.update({ busy: true, looping, error: null, notice: '', phase: 'capturing' })
     try {
       do {
@@ -65,24 +68,46 @@ export class AssessmentController {
         const id = randomUUID()
         const config = structuredClone(this.config())
         this.update({ runId: id, result: null, debug: null, raw: '' })
-        const outcome = await this.runner.run(
-          {
-            id,
-            config,
-            signal: controller.signal,
-            phase: (phase) => {
-              if (!controller.signal.aborted) this.update({ phase })
-            }
-          },
-          (patch) => {
-            if (this.state.runId === id) this.update(patch)
-          },
-          previousPage
-        )
+        retry.beginAttempt()
+        let outcome: { preview: boolean; pageKey: string }
+        try {
+          outcome = await this.runner.run(
+            {
+              id,
+              config,
+              signal: controller.signal,
+              recovery: retry.recovery,
+              verificationOnly,
+              phase: (phase) => {
+                if (!controller.signal.aborted) this.update({ phase })
+              }
+            },
+            (patch) => {
+              if (this.state.runId === id) this.update(patch)
+            },
+            retry
+          )
+        } catch (error) {
+          if (!(error instanceof AssessmentPageChangedError)) throw error
+          checkAborted(controller.signal)
+          retry.observe()
+          retry.recovery = error.recovery ?? retry.recovery
+          this.update({
+            error: null,
+            phase: 'refreshing',
+            notice:
+              retry.retryCount >= MAX_ASSESSMENT_RETRIES
+                ? `${error.message}，已用完 3 次补充分析，将在 3 秒后确认是否进入新题`
+                : `${error.message}，将在 3 秒后重新截屏识别（重试 ${retry.retryCount + 1}/3）；可随时停止`
+          })
+          await this.delay(3000, controller.signal)
+          continue
+        }
         checkAborted(controller.signal)
         completed = true
-        previousPage = outcome.pageKey
-        if (!looping || outcome.preview) break
+        if (outcome.preview || verificationOnly) break
+        if (!looping && retry.retryCount < MAX_ASSESSMENT_RETRIES) break
+        verificationOnly = !looping
         this.update({ phase: 'waiting' })
         await this.delay(3000, controller.signal)
       } while (!controller.signal.aborted)

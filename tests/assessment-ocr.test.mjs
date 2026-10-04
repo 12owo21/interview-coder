@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { readFileSync } from 'node:fs'
 import loader from './helpers/load-ts.cjs'
 
 const load = loader.createLoader()
-const { OcrLayoutAnalyzer, optionLabel } = load('src/main/assessment/ocr-layout-analyzer.ts')
+const { AssessmentOcrPreparer } = load('src/main/assessment/ocr-regions.ts')
+const { AssessmentTargetResolver } = load('src/main/assessment/target-resolver.ts')
+const { filterAssessmentOcrRegions } = load('src/main/assessment/ocr-filter.ts')
 const { AssessmentResponseValidator, parseUniqueJson } = load(
   'src/main/assessment/response-validator.ts'
 )
@@ -14,7 +17,56 @@ const { AssessmentMemoryService, questionKeys, stripQuestionNumber } = load(
 const { AssessmentClickExecutor } = load('src/main/assessment/click-executor.ts')
 const { AssessmentRunner } = load('src/main/assessment/runner.ts')
 const { AssessmentController } = load('src/main/assessment/controller.ts')
+const { AssessmentPageChangedError } = load('src/main/assessment/recovery.ts')
+const { AssessmentRetrySession, assessmentPageIdentity } = load(
+  'src/main/assessment/retry-session.ts'
+)
 const { imageToScreen } = load('src/main/assessment/coordinate-mapper.ts')
+
+test('reported sidebar and detached A sample validates and targets the model-selected OCR box', () => {
+  const ocr = JSON.parse(
+    readFileSync(new URL('./fixtures/assessment-ocr-sidebar.json', import.meta.url), 'utf8')
+  )
+  const response = {
+    schemaVersion: 3,
+    captureId: 'cap',
+    status: 'ok',
+    question: ocr.regions[4].text,
+    questionRegionIds: ['r005'],
+    answers: ['A'],
+    options: {
+      A: { text: '105', regionIds: ['r008', 'r009'], clickRegionId: 'r009' },
+      B: { text: '89', regionIds: ['r015'], clickRegionId: 'r015' },
+      C: { text: '95', regionIds: ['r016'], clickRegionId: 'r016' },
+      D: { text: '135', regionIds: ['r020'], clickRegionId: 'r020' }
+    },
+    next: { required: true, kind: 'next', clickRegionId: 'r028' }
+  }
+  const parsed = validate(response, ocr)
+  const layout = new AssessmentOcrPreparer().prepare(ocr, ocr.imageSize)
+  const plan = new AssessmentTargetResolver().resolve(
+    config(),
+    parsed,
+    {
+      ...capture,
+      imageWidth: 1707,
+      imageHeight: 1067,
+      fullWidth: 1707,
+      fullHeight: 1067,
+      physicalWidth: 2560,
+      physicalHeight: 1600
+    },
+    layout
+  )
+  assert.equal(layout.regions.length, 30)
+  assert.deepEqual(
+    plan.map((s) => s.regionId),
+    ['r009', 'r028']
+  )
+  assert.deepEqual(plan[0].imagePoint, { x: 407, y: 273.5 })
+  assert.deepEqual(plan[0].screenPoint, { x: 610, y: 410 })
+  assert.deepEqual(plan[1].imagePoint, { x: 834.5, y: 991.5 })
+})
 
 function row(text, top, left = 200, right = 750, height = 30) {
   return { text, score: 0.99, points: [], box: { left, top, right, bottom: top + height } }
@@ -35,22 +87,22 @@ function fixture() {
     ]
   }
   const response = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     captureId: 'cap',
     status: 'ok',
-    questionBlockId: 'q001',
+    questionRegionIds: ['r001'],
     question: '1. 请按顺序选择',
     answers: ['B', 'A'],
     options: {
-      A: { text: '第一行内容\n这是续行', regionIds: ['r002', 'r003'] },
-      B: { text: '第二个选项\n这是另一个续行', regionIds: ['r004', 'r005'] }
+      A: { text: '第一行内容\n这是续行', regionIds: ['r002', 'r003'], clickRegionId: 'r002' },
+      B: { text: '第二个选项\n这是另一个续行', regionIds: ['r004', 'r005'], clickRegionId: 'r004' }
     },
-    next: { required: true, kind: 'next', regionIds: ['r006'] }
+    next: { required: true, kind: 'next', clickRegionId: 'r006' }
   }
   return { ocr, response }
 }
 function validate(response, ocr) {
-  const layout = new OcrLayoutAnalyzer().analyze(ocr, ocr.imageSize)
+  const layout = new AssessmentOcrPreparer().prepare(ocr, ocr.imageSize)
   return new AssessmentResponseValidator().parseAndValidate(JSON.stringify(response), {
     strategy: 'ocr',
     captureId: 'cap',
@@ -58,90 +110,37 @@ function validate(response, ocr) {
   })
 }
 
-test('multiline options form separate groups at both image scales', () => {
-  for (const scale of [1, 1.5]) {
-    const { ocr, response } = fixture()
-    ocr.imageSize = { width: 1000 * scale, height: 1000 * scale }
-    for (const r of ocr.regions) for (const k of Object.keys(r.box)) r.box[k] *= scale
-    const layout = new OcrLayoutAnalyzer().analyze(ocr, ocr.imageSize)
-    assert.deepEqual(
-      layout.candidates.filter((g) => g.labelHint).map((g) => g.regionIds),
-      [
-        ['r002', 'r003'],
-        ['r004', 'r005']
-      ]
-    )
-    assert.deepEqual(validate(response, ocr).answers, ['B', 'A'])
-  }
-})
-
-test('detached label below text baseline attaches once and does not lose continuation', () => {
-  const { ocr } = fixture()
-  ocr.regions = [
-    row('1. 选择', 150),
-    row('第一行', 250, 250),
-    row('A', 252, 200, 220),
-    row('续行', 280, 250),
-    row('B. 第二项', 380)
-  ]
-  const layout = new OcrLayoutAnalyzer().analyze(ocr, ocr.imageSize)
-  const a = layout.candidates.find((g) => g.labelHint === 'A')
-  assert.deepEqual(a.regionIds, ['r003', 'r002', 'r004'])
-  assert.equal(layout.candidates.flatMap((g) => g.regionIds).length, 5)
-  const response = {
-    schemaVersion: 2,
-    captureId: 'cap',
-    status: 'ok',
-    questionBlockId: 'q001',
-    question: '选择',
-    answers: ['A'],
-    options: {
-      A: { text: '第一行\n续行', regionIds: a.regionIds },
-      B: { text: '第二项', regionIds: ['r005'] }
-    },
-    next: { required: false }
-  }
-  assert.equal(validate(response, ocr).answers[0], 'A')
-})
-
-test('SQL A.value does not create a new option; explicit option boundaries do', () => {
-  assert.equal(optionLabel('A.value = B.value'), undefined)
-  for (const text of ['A. 中文', 'A）中文', '(A) text', 'A、内容'])
-    assert.equal(optionLabel(text), 'A')
-  const { ocr } = fixture()
-  ocr.regions[3].box.top = 311
-  ocr.regions[3].box.bottom = 341
-  const groups = new OcrLayoutAnalyzer().analyze(ocr, ocr.imageSize).candidates
-  assert.equal(groups.filter((g) => g.labelHint).length, 2)
-})
-
-test('realistic glyph height and small misread radio do not split multiline SQL', () => {
-  const { ocr } = fixture()
-  ocr.regions = [
-    row('1. 选择 SQL', 150),
-    row('SELECT SUM(value) FROM', 250, 200, 800, 27),
-    row('Products JOIN Sales', 298, 220, 750, 27),
-    row('SELECT COUNT(value) FROM', 400, 200, 800, 27),
-    row('3', 410, 185, 195, 10),
-    row('Products JOIN Sales', 448, 220, 750, 27)
-  ]
-  const groups = new OcrLayoutAnalyzer()
-    .analyze(ocr, ocr.imageSize)
-    .candidates.filter((g) => g.joinedText.startsWith('SELECT'))
-  assert.deepEqual(
-    groups.map((g) => g.regionIds),
-    [
-      ['r002', 'r003'],
-      ['r004', 'r006']
-    ]
-  )
-})
-
-test('two distinct navigation buttons cannot be combined as one next target', () => {
+test('OCR preparation preserves every box without question or option grouping', () => {
   const { ocr, response } = fixture()
-  ocr.regions.push(row('下一步', 850, 600, 700))
-  response.next.regionIds.push('r007')
-  assert.throws(() => validate(response, ocr))
+  ocr.regions.push(row('第8题/共12题', 150, 880, 990), row('3', 410, 185, 195, 10))
+  ocr.regions[1].score = 0.63
+  const layout = new AssessmentOcrPreparer().prepare(ocr, ocr.imageSize)
+  assert.equal(layout.regions.length, ocr.regions.length)
+  assert.deepEqual(
+    layout.regions.map((r) => r.box),
+    ocr.regions.map((r) => r.box)
+  )
+  assert.equal(layout.blocks, undefined)
+  assert.equal(layout.candidates, undefined)
+  assert.equal(filterAssessmentOcrRegions(layout.regions), layout.regions)
+  assert.deepEqual(validate(response, ocr).answers, ['B', 'A'])
+})
+
+test('OCR preparation rejects wrong image size and invalid boxes', () => {
+  const { ocr } = fixture()
+  const preparer = new AssessmentOcrPreparer()
+  assert.throws(() => preparer.prepare(ocr, { width: 2000, height: 1000 }), /尺寸/)
+  ocr.regions[0].box.left = -1
+  assert.throws(() => preparer.prepare(ocr, ocr.imageSize), /无效文字框/)
+})
+
+test('model-selected multi-column options and wide line gaps do not require local grouping', () => {
+  const { ocr, response } = fixture()
+  ocr.regions[2].box.top = 325
+  ocr.regions[2].box.bottom = 355
+  ocr.regions[3].box = { left: 800, right: 990, top: 250, bottom: 280 }
+  ocr.regions[4].box = { left: 800, right: 990, top: 325, bottom: 355 }
+  assert.deepEqual(validate(response, ocr).answers, ['B', 'A'])
 })
 
 test('validated text removes option labels before personality memory matching', () => {
@@ -151,16 +150,73 @@ test('validated text removes option labels before personality memory matching', 
   assert.equal(parsed.options.A.text, '第一行内容\n这是续行')
 })
 
-test('question blocks do not merge and sidebar text stays outside numbered question', () => {
-  const { ocr } = fixture()
-  ocr.regions.push(row('2. 第二道题', 880), row('侧栏', 280, 900, 990))
-  const layout = new OcrLayoutAnalyzer().analyze(ocr, ocr.imageSize)
-  assert.equal(layout.blocks.length, 2)
-  assert.ok(!layout.blocks[0].regionIds.includes('r007'))
-  assert.ok(!layout.blocks[0].regionIds.includes('r008'))
+test('model text differences use OCR text without rejecting valid region references', () => {
+  for (const modelText of ['第一行内容；这是续行', '模型改写后的选项']) {
+    const { ocr, response } = fixture()
+    response.options.A.text = modelText
+    const parsed = validate(response, ocr)
+    assert.equal(parsed.options.A.text, '第一行内容\n这是续行')
+    assert.equal(parsed.options.A.clickRegionId, 'r002')
+    assert.equal(parsed.notices.length, 1)
+    assert.match(parsed.notices[0], /选项 A.*OCR 原文/)
+  }
 })
 
 for (const [name, mutate] of [
+  [
+    'missing click ID',
+    (r) => {
+      delete r.options.A.clickRegionId
+    }
+  ],
+  [
+    'click outside option',
+    (r) => {
+      r.options.A.clickRegionId = 'r004'
+    }
+  ],
+  [
+    'unknown next ID',
+    (r) => {
+      r.next.clickRegionId = 'missing'
+    }
+  ],
+  [
+    'missing stem',
+    (r) => {
+      r.questionRegionIds = []
+    }
+  ],
+  [
+    'unknown stem ID',
+    (r) => {
+      r.questionRegionIds = ['missing']
+    }
+  ],
+  [
+    'duplicate stem ID',
+    (r) => {
+      r.questionRegionIds = ['r001', 'r001']
+    }
+  ],
+  [
+    'stem option overlap',
+    (r) => {
+      r.questionRegionIds = ['r002']
+    }
+  ],
+  [
+    'next coordinates',
+    (r) => {
+      r.next.x = 123
+    }
+  ],
+  [
+    'legacy question block',
+    (r) => {
+      r.questionBlockId = 'q001'
+    }
+  ],
   [
     'wrong capture',
     (r) => {
@@ -204,19 +260,6 @@ for (const [name, mutate] of [
     }
   ],
   [
-    'missing option',
-    (r) => {
-      delete r.options.B
-      r.answers = ['A']
-    }
-  ],
-  [
-    'rewritten text',
-    (r) => {
-      r.options.A.text = '完全无关的内容'
-    }
-  ],
-  [
     'coordinate injection',
     (r) => {
       r.options.A.x = 123
@@ -225,19 +268,13 @@ for (const [name, mutate] of [
   [
     'next overlap',
     (r) => {
-      r.next.regionIds = ['r002']
+      r.next.clickRegionId = 'r002'
     }
   ],
   [
     'submit',
     (r) => {
       r.next.kind = 'submit'
-    }
-  ],
-  [
-    'unsupported columns',
-    (_r, ocr) => {
-      ocr.regions[3].box = { left: 800, right: 990, top: 250, bottom: 280 }
     }
   ],
   [
@@ -310,14 +347,14 @@ function harness(options = {}) {
     capture: async () => ({ ...capture, capturedAt: Date.now() }),
     ocr: async () => {
       if (options.ocrThrows) throw new Error('unexpected OCR')
-      return ocr
+      return options.ocr ?? ocr
     },
     memory,
     ask: async (messages, system, profile, signal, chunk) => {
       prompts.push({ messages, system, profile })
       const data = JSON.parse(messages[0].content[0].text)
       response.captureId = data.captureId
-      if (options.ask) return options.ask(response, signal)
+      if (options.ask) return options.ask(response, signal, data)
       const raw = JSON.stringify(response)
       chunk(raw)
       return raw
@@ -335,7 +372,8 @@ function harness(options = {}) {
       prepare: () => ({
         check: async () => {
           guards++
-          if (options.failGuardAt === guards) throw new Error('page changed')
+          if (options.failGuardAt === guards || options.failGuards?.includes(guards))
+            throw new AssessmentPageChangedError('page changed')
         }
       })
     },
@@ -387,7 +425,102 @@ test('OCR pipeline clicks ordered first-line centers then next, uses one image a
   assert.equal(h.last.result.execution, 'executed')
   assert.equal(h.prompts[0].messages[0].content[1].image, capture.data)
   assert.equal(h.prompts[0].profile.id, 'p')
+  const sent = JSON.parse(h.prompts[0].messages[0].content[0].text)
+  assert.equal(sent.ocr.regions.length, fixture().ocr.regions.length)
+  assert.equal(sent.ocr.blocks, undefined)
+  assert.equal(sent.ocr.candidates, undefined)
   assert.ok(h.memory.snapshot().context)
+})
+
+test('reported B colon/semicolon difference completes once and stores OCR text', async () => {
+  const { ocr } = fixture()
+  const first =
+    '更换上网方式：建议用手机分享WiFi热点，通过电脑连接手机WiFi上网：或者更换到WiFi信号强的地方再次尝试，不建议使用校园网'
+  const continuation = '络或者公司内部网络'
+  ocr.regions[3].text = first
+  ocr.regions[4].text = continuation
+  const h = harness({
+    ocr,
+    ask: async (r) => {
+      r.options.B.text = first.replace('上网：', '上网；') + continuation
+      r.answers = ['B']
+      return JSON.stringify(r)
+    }
+  })
+  const states = []
+  const c = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    (s) => states.push(s),
+    async () => {
+      throw new Error('Text mismatch must not retry or wait')
+    }
+  )
+  assert.equal(await c.runOnce(), true, c.getSnapshot().error)
+  assert.equal(h.prompts.length, 1)
+  assert.deepEqual(h.clicks, [
+    { x: 950, y: 790 },
+    { x: 1300, y: 1630 }
+  ])
+  const result = c.getSnapshot().result
+  assert.equal(result.optionTexts.B, first + '\n' + continuation)
+  assert.ok(result.raw.includes('上网；'))
+  assert.match(result.notices[0], /选项 B.*OCR 原文/)
+  assert.match(c.getSnapshot().notice, /选项 B.*OCR 原文/)
+  assert.ok(h.memory.snapshot().context.includes('上网：'))
+  assert.ok(!h.memory.snapshot().context.includes('上网；'))
+  assert.ok(states.every((s) => s.error === null && s.phase !== 'refreshing'))
+})
+
+test('model text correction does not bypass unknown or invalid click references', () => {
+  const { ocr, response } = fixture()
+  response.options.A.text = '改写文本'
+  response.options.A.clickRegionId = 'r004'
+  assert.throws(() => validate(response, ocr), /点击框不属于/)
+  response.options.A.regionIds = ['does-not-exist']
+  response.options.A.clickRegionId = 'does-not-exist'
+  assert.throws(() => validate(response, ocr), /不存在/)
+})
+
+test('model can select a continuation line as the click target without coordinate inference', async () => {
+  const h = harness({
+    ask: async (r) => {
+      r.answers = ['A']
+      r.options.A.clickRegionId = 'r003'
+      r.next = { required: false }
+      return JSON.stringify(r)
+    }
+  })
+  await h.run()
+  assert.deepEqual(h.clicks, [{ x: 950, y: 590 }])
+  assert.equal(h.last.result.plan[0].regionId, 'r003')
+})
+
+test('OCR failure never falls back to model coordinates or issues clicks', async () => {
+  const h = harness({ ocrThrows: true })
+  await assert.rejects(h.run(), /unexpected OCR/)
+  assert.equal(h.clicks.length, 0)
+  assert.equal(h.prompts.length, 0)
+})
+
+test('invalid final target prevents all clicks and memory writes', async () => {
+  const h = harness({
+    ask: async (r) => {
+      r.next.clickRegionId = 'missing'
+      return JSON.stringify(r)
+    }
+  })
+  await assert.rejects(h.run(), /不存在/)
+  assert.equal(h.clicks.length, 0)
+  assert.equal(h.memory.snapshot().context, '')
+})
+
+test('model can select OCR next text containing recognition errors', () => {
+  const { ocr, response } = fixture()
+  ocr.regions[5].text = '下—题'
+  assert.equal(validate(response, ocr).next.clickRegionId, 'r006')
+  ocr.regions[5].text = '提交子卷'
+  assert.throws(() => validate(response, ocr), /提交/)
 })
 
 test('preview never clicks or stores memory; normal mode never includes personality/history', async () => {
@@ -428,12 +561,175 @@ test('changed page and cancellation stop remaining steps without successful memo
   assert.equal(cancelled.memory.snapshot().context, '')
 })
 
-test('unchanged next iteration does not repeat clicks', async () => {
-  const h = harness()
-  const { pageKey } = await h.run()
-  await assert.rejects(h.run(undefined, pageKey), /页面未切换/)
-  assert.equal(h.clicks.length, 3)
+for (const failGuardAt of [1, 2, 3]) {
+  test(`single request re-captures after change at step ${failGuardAt} without repeating clicks`, async () => {
+    const h = harness({
+      config: { memoryEnabled: false },
+      failGuardAt,
+      ask: async (r, _signal, data) => {
+        if (data.recovery) r.selectedAnswers = data.recovery.executedAnswers
+        return JSON.stringify(r)
+      }
+    })
+    const states = [],
+      waits = []
+    const c = new AssessmentController(
+      h.runner,
+      () => h.cfg,
+      (s) => states.push(s),
+      async (ms) => waits.push(ms)
+    )
+    assert.equal(await c.runOnce(), true, c.getSnapshot().error)
+    assert.deepEqual(h.clicks, [
+      { x: 950, y: 790 },
+      { x: 950, y: 530 },
+      { x: 1300, y: 1630 }
+    ])
+    assert.deepEqual(waits, [3000])
+    const first = JSON.parse(h.prompts[0].messages[0].content[0].text)
+    const retry = JSON.parse(h.prompts[1].messages[0].content[0].text)
+    assert.notEqual(first.captureId, retry.captureId)
+    assert.deepEqual(retry.recovery.executedAnswers, ['B', 'A'].slice(0, failGuardAt - 1))
+    assert.equal(retry.assessmentHistory, undefined)
+    assert.equal(h.memory.snapshot().context, '')
+    assert.ok(states.some((s) => s.notice.includes('重新截屏') && s.busy && !s.error))
+    assert.equal(c.getSnapshot().error, null)
+  })
+}
+
+test('recovery of a new question does not skip its answers based on old execution', async () => {
+  const h = harness({
+    failGuardAt: 2,
+    ask: async (r, _signal, data) => {
+      if (data.recovery) {
+        r.question = '2. 新题目'
+        r.selectedAnswers = []
+        r.answers = ['A']
+      }
+      return JSON.stringify(r)
+    }
+  })
+  const c = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    () => {},
+    async () => {}
+  )
+  assert.equal(await c.runOnce(), true)
+  assert.deepEqual(h.clicks, [
+    { x: 950, y: 790 },
+    { x: 950, y: 530 },
+    { x: 1300, y: 1630 }
+  ])
 })
+
+test('repeated recovery retains all confirmed selections and only stores completed memory', async () => {
+  let calls = 0
+  const recoveryContexts = []
+  const h = harness({
+    failGuardAt: 2,
+    ask: async (r, _signal, data) => {
+      calls++
+      if (data.recovery) {
+        recoveryContexts.push(data.recovery)
+        r.selectedAnswers = data.recovery.executedAnswers
+      }
+      return JSON.stringify(r)
+    }
+  })
+  const originalRun = h.runner.run.bind(h.runner)
+  let attempts = 0
+  const c = new AssessmentController(
+    {
+      run: async (...args) => {
+        attempts++
+        if (attempts === 2) {
+          // A transient change before any new click must retain the first attempt's progress.
+          throw new AssessmentPageChangedError()
+        }
+        return originalRun(...args)
+      }
+    },
+    () => h.cfg,
+    () => {},
+    async () => {}
+  )
+  assert.equal(await c.runOnce(), true)
+  assert.equal(calls, 2)
+  assert.deepEqual(recoveryContexts[0].executedAnswers, ['B'])
+  assert.equal(h.clicks.length, 3)
+  assert.ok(h.memory.snapshot().context.includes('B → A'))
+})
+
+test('loop stays active during recovery and user can stop repeated changes', async () => {
+  let calls = 0
+  let c
+  c = new AssessmentController(
+    {
+      run: async () => {
+        calls++
+        throw new AssessmentPageChangedError()
+      }
+    },
+    config,
+    () => {},
+    async (ms) => {
+      assert.equal(ms, 3000)
+      assert.equal(c.getSnapshot().looping, true)
+      assert.equal(c.getSnapshot().error, null)
+      await assert.rejects(
+        c.runManual(async () => {}),
+        /停止/
+      )
+      if (calls === 4) c.stop()
+    }
+  )
+  await c.toggleLoop()
+  assert.equal(calls, 4)
+  assert.equal(c.getSnapshot().busy, false)
+  assert.equal(c.getSnapshot().error, null)
+})
+
+test('ordinary errors are not retried as page changes', async () => {
+  let calls = 0
+  const c = new AssessmentController(
+    {
+      run: async () => {
+        calls++
+        throw new Error('AI format error')
+      }
+    },
+    config,
+    () => {},
+    async () => {
+      throw new Error('unexpected retry')
+    }
+  )
+  assert.equal(await c.runOnce(), false)
+  assert.equal(calls, 1)
+  assert.equal(c.getSnapshot().error, 'AI format error')
+})
+
+for (const selected of [undefined, ['A'], ['B', 'B'], ['C']]) {
+  test(`recovery rejects ambiguous or invalid selections ${JSON.stringify(selected)}`, async () => {
+    const h = harness({
+      failGuardAt: 2,
+      ask: async (r, _signal, data) => {
+        if (data.recovery) r.selectedAnswers = selected
+        return JSON.stringify(r)
+      }
+    })
+    const c = new AssessmentController(
+      h.runner,
+      () => h.cfg,
+      () => {},
+      async () => {}
+    )
+    assert.equal(await c.runOnce(), false)
+    assert.equal(h.clicks.length, 1)
+    assert.equal(h.memory.snapshot().context, '')
+  })
+}
 
 test('coordinate conversion includes crop offsets and never guesses screen scale', () => {
   assert.deepEqual(
@@ -453,6 +749,179 @@ test('coordinate conversion includes crop offsets and never guesses screen scale
   )
   assert.throws(() => imageToScreen({ x: -1, y: 0 }, capture))
   assert.throws(() => imageToScreen({ x: 20, y: 30 }, { ...capture, originX: -2560 }))
+})
+
+test('missed next is recovered without reselecting B; a new question resets the budget', async () => {
+  const { ocr } = fixture()
+  let calls = 0
+  let c
+  const h = harness({
+    ocr,
+    ask: async (r, _signal, data) => {
+      calls++
+      r.answers = ['B']
+      r.question = data.ocr.regions[0].text
+      if (data.recovery) r.selectedAnswers = calls === 2 ? ['B'] : []
+      r.next =
+        calls === 1 ? { required: false } : { required: true, kind: 'next', clickRegionId: 'r006' }
+      return JSON.stringify(r)
+    },
+    onClick: async (count) => {
+      if (count === 2) ocr.regions[0].text = '2. 请按顺序选择'
+    }
+  })
+  const states = []
+  c = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    (s) => states.push(s),
+    async () => {
+      if (calls === 3) c.stop()
+    }
+  )
+  await c.toggleLoop()
+  assert.equal(calls, 3)
+  assert.deepEqual(h.clicks, [
+    { x: 950, y: 790 },
+    { x: 1300, y: 1630 },
+    { x: 950, y: 790 },
+    { x: 1300, y: 1630 }
+  ])
+  assert.ok(states.some((s) => s.notice.includes('重试 1/3')))
+  assert.equal(c.getSnapshot().error, null)
+  assert.equal((h.memory.snapshot().context.match(/题目：/g) ?? []).length, 2)
+})
+
+test('same question gets three corrective actions and a final verification without a fourth click', async () => {
+  const h = harness({
+    ask: async (r, _signal, data) => {
+      r.answers = ['B']
+      if (data.recovery) r.selectedAnswers = ['B']
+      return JSON.stringify(r)
+    }
+  })
+  const c = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    () => {},
+    async () => {}
+  )
+  assert.equal(await c.toggleLoop(), false)
+  assert.match(c.getSnapshot().error, /已补充分析 3 次/)
+  assert.equal(h.prompts.length, 5)
+  assert.deepEqual(h.clicks, [
+    { x: 950, y: 790 },
+    ...Array.from({ length: 4 }, () => ({ x: 1300, y: 1630 }))
+  ])
+  assert.equal((h.memory.snapshot().context.match(/题目：/g) ?? []).length, 1)
+})
+
+test('third recovery can enter a new question before the limit terminates the loop', async () => {
+  const { ocr } = fixture()
+  let calls = 0,
+    c
+  const h = harness({
+    ocr,
+    ask: async (r, _signal, data) => {
+      calls++
+      r.answers = ['B']
+      r.question = data.ocr.regions[0].text
+      if (data.recovery) r.selectedAnswers = calls === 5 ? [] : ['B']
+      return JSON.stringify(r)
+    },
+    onClick: async (count) => {
+      if (count === 5) ocr.regions[0].text = '2. 请按顺序选择'
+    }
+  })
+  c = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    () => {},
+    async () => {
+      if (calls === 5) c.stop()
+    }
+  )
+  await c.toggleLoop()
+  assert.equal(calls, 5)
+  assert.equal(h.clicks.length, 7)
+  assert.equal(c.getSnapshot().error, null)
+  assert.equal((h.memory.snapshot().context.match(/题目：/g) ?? []).length, 2)
+})
+
+test('image changes and unchanged questions consume the same three-retry budget', async () => {
+  const h = harness({
+    failGuards: [2, 4],
+    ask: async (r, _signal, data) => {
+      r.answers = ['B']
+      if (data.recovery) r.selectedAnswers = ['B']
+      return JSON.stringify(r)
+    }
+  })
+  const c = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    () => {},
+    async () => {}
+  )
+  await c.toggleLoop()
+  assert.equal(h.prompts.length, 5)
+  assert.equal(h.clicks.length, 3)
+  assert.match(c.getSnapshot().error, /已补充分析 3 次/)
+  assert.equal((h.memory.snapshot().context.match(/题目：/g) ?? []).length, 1)
+})
+
+test('uncertain selections consume retry budget without any additional click', async () => {
+  const h = harness({
+    ask: async (r, _signal, data) => {
+      if (data.recovery)
+        return JSON.stringify({
+          schemaVersion: 3,
+          captureId: data.captureId,
+          status: 'uncertain',
+          reason: '无法确认选中状态'
+        })
+      return JSON.stringify(r)
+    }
+  })
+  const c = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    () => {},
+    async () => {}
+  )
+  await c.toggleLoop()
+  assert.equal(h.prompts.length, 5)
+  assert.equal(h.clicks.length, 3)
+  assert.match(c.getSnapshot().error, /已补充分析 3 次/)
+})
+
+test('page identity ignores punctuation, layout and label order, but keeps option content and progress', () => {
+  const { ocr, response } = fixture()
+  const a = validate(response, ocr)
+  const first = assessmentPageIdentity(a)
+  const b = structuredClone(a)
+  b.question = '1. 请按顺序，选择！'
+  b.options = { B: { text: a.options.A.text }, A: { text: a.options.B.text } }
+  const session = new AssessmentRetrySession()
+  assert.equal(session.observe(first), false)
+  session.beginAttempt()
+  assert.equal(session.observe(assessmentPageIdentity(b)), true)
+  assert.equal(session.retryCount, 1)
+  b.question = '2. 请按顺序选择'
+  session.beginAttempt()
+  assert.equal(session.observe(assessmentPageIdentity(b)), false)
+  assert.equal(session.retryCount, 0)
+  b.options.A.text = '不同选项'
+  session.beginAttempt()
+  assert.equal(session.observe(assessmentPageIdentity(b)), false)
+  // OCR progress remains available even if the model omits the title from questionRegionIds.
+  ocr.regions.push(row('第8题/共12题', 150, 880, 990))
+  a.question = '请按顺序选择'
+  a.questionRegionIds = ['r002']
+  assert.equal(
+    assessmentPageIdentity(a, new AssessmentOcrPreparer().prepare(ocr, ocr.imageSize)).progress,
+    '8'
+  )
 })
 
 test('memory uses option content across reorder and rejects stale session commits', () => {

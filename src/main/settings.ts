@@ -98,7 +98,7 @@ export const settings = {
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
   assessmentOcrEnabled: false,
-  assessmentOcrPreviewOnly: true,
+  assessmentOcrPreviewOnly: false,
   assessmentShowOcrDebug: false,
   ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
   assessmentPersonalityPrompt: DEFAULT_ASSESSMENT_PERSONALITY_PROMPT,

@@ -388,7 +388,7 @@ const defaultSettings: Settings = {
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
   assessmentOcrEnabled: false,
-  assessmentOcrPreviewOnly: true,
+  assessmentOcrPreviewOnly: false,
   assessmentShowOcrDebug: false,
   ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
   assessmentPersonalityPrompt:

@@ -1,13 +1,8 @@
 import { z } from 'zod'
 import type { OcrLayout, AssessmentRegion } from '../../shared/assessment'
 import type { ParsedAssessment } from './types'
-import {
-  isContinuation,
-  NEXT_TEXT,
-  NAV_TEXT,
-  optionLabel,
-  stripOptionLabel
-} from './ocr-layout-analyzer'
+import { stripOptionLabel } from './ocr-regions'
+import { AssessmentUncertainError } from './recovery'
 
 const letter = z.string().regex(/^[A-Z]$/)
 const text = z.string().trim().min(1).max(32000)
@@ -16,7 +11,7 @@ const answers = z.array(letter).min(1).max(26)
 const ocrSchema = z.discriminatedUnion('status', [
   z
     .object({
-      schemaVersion: z.literal(2),
+      schemaVersion: z.literal(3),
       captureId: text,
       status: z.literal('uncertain'),
       reason: text
@@ -24,20 +19,21 @@ const ocrSchema = z.discriminatedUnion('status', [
     .strict(),
   z
     .object({
-      schemaVersion: z.literal(2),
+      schemaVersion: z.literal(3),
       captureId: text,
       status: z.literal('ok'),
-      questionBlockId: text,
+      questionRegionIds: refs,
       question: text,
       answers,
-      options: z.record(letter, z.object({ text, regionIds: refs }).strict()),
+      selectedAnswers: z.array(letter).max(26).optional(),
+      options: z.record(letter, z.object({ text, regionIds: refs, clickRegionId: text }).strict()),
       next: z.discriminatedUnion('required', [
         z.object({ required: z.literal(false) }).strict(),
         z
           .object({
             required: z.literal(true),
             kind: z.enum(['next', 'continue', 'submit']),
-            regionIds: refs
+            clickRegionId: text
           })
           .strict()
       ])
@@ -58,6 +54,7 @@ const legacySchema = z.object({
   question: text,
   answer: letter.optional(),
   answers: answers.optional(),
+  selectedAnswers: z.array(letter).max(26).optional(),
   options: z.record(letter, legacyOption),
   next: z
     .object({
@@ -128,84 +125,52 @@ export class AssessmentResponseValidator {
       if (!parsed.success) throw new Error(`OCR 答案格式错误：${parsed.error.issues[0]?.message}`)
       const value = parsed.data
       if (value.captureId !== context.captureId) throw new Error('AI 引用了另一张截图，已停止')
-      if (value.status === 'uncertain') throw new Error(`AI 无法确认：${value.reason}`)
-      const layout = context.layout!
-      const block = layout.blocks.find((item) => item.id === value.questionBlockId)
-      if (!block || block !== layout.blocks[0])
-        throw new Error('当前只支持处理第一道完整题目，请调整截图范围')
+      if (value.status === 'uncertain') throw new AssessmentUncertainError(value.reason)
+      const layout = context.layout
+      if (!layout) throw new Error('缺少本次 OCR 文字框，无法校验点击位置')
       const byId = new Map(layout.regions.map((region) => [region.id, region]))
       const used = new Set<string>()
-      const optionRows: AssessmentRegion[][] = []
-      for (const [key, option] of Object.entries(value.options)) {
-        const rows = option.regionIds
-          .map((id) => {
-            const row = byId.get(id)
-            if (!row || !block.regionIds.includes(id) || used.has(id))
-              throw new Error(`选项 ${key} 的文字框不存在、重复或跨题目`)
-            if (NEXT_TEXT.test(row.text.trim()) || NAV_TEXT.test(row.text.trim()))
-              throw new Error('选项引用了导航按钮')
-            used.add(id)
-            return row
-          })
-          .sort((a, b) => a.box.top - b.box.top || a.box.left - b.box.left)
-        const markers = rows.map((r) => optionLabel(r.text)).filter(Boolean)
-        if (markers.some((marker) => marker !== key))
-          throw new Error(`选项 ${key} 与 OCR 字母不一致`)
-        let previous = rows[0]
-        for (const row of rows.slice(1)) {
-          const group = layout.candidates.find(
-            (g) => g.regionIds.includes(previous.id) && g.regionIds.includes(row.id)
-          )
-          if (!group && !isContinuation(previous, row))
-            throw new Error(`选项 ${key} 的多行文字不相邻，无法可靠定位`)
-          previous = row
-        }
-        const withoutStandalone = rows.filter((r) => !/^[A-Z]$/.test(r.text.trim()))
-        if (!withoutStandalone.length) throw new Error(`选项 ${key} 只有字母，没有正文`)
-        if (
-          normalizedText(option.text) !==
-          normalizedText(withoutStandalone.map((r) => r.text).join('\n'))
-        ) {
-          throw new Error(`选项 ${key} 文本与 OCR 引用不一致，请保留引用文字原文`)
-        }
-        optionRows.push(withoutStandalone)
-      }
-      // Explicit option markers must not disappear from the model's answer.
-      for (const candidate of layout.candidates.filter(
-        (g) => g.questionBlockId === block.id && g.labelHint
-      )) {
-        if (!value.options[candidate.labelHint!])
-          throw new Error(`AI 遗漏了选项 ${candidate.labelHint}`)
-      }
-      const ordered = optionRows.sort((a, b) => a[0].box.top - b[0].box.top)
-      for (let i = 1; i < ordered.length; i++) {
-        const prev = ordered[i - 1]
-        const next = ordered[i][0]
-        const h = next.box.bottom - next.box.top
-        if (
-          next.box.top < Math.max(...prev.map((r) => r.box.bottom)) - h * 0.3 ||
-          Math.abs(next.box.left - prev[0].box.left) > h * 3
-        ) {
-          throw new Error('选项存在多列、交叉或异常缩进，当前只支持单列文字选项')
-        }
-      }
-      if (value.next.required) {
-        if (value.next.kind === 'submit') throw new Error('检测到提交操作，请手动确认提交范围')
-        const rows = value.next.regionIds.map((id) => {
+      const claim = (ids: string[], owner: string): AssessmentRegion[] =>
+        ids.map((id) => {
           const row = byId.get(id)
-          if (!row || used.has(id)) throw new Error('下一步文字框无效或与选项重叠')
+          if (!row) throw new Error(`${owner} 引用了不存在的 OCR 文字框：${id}`)
+          if (used.has(id)) throw new Error(`${owner} 重复引用了 OCR 文字框：${id}`)
           used.add(id)
           return row
         })
-        if (rows.length !== 1 || !NEXT_TEXT.test(rows[0].text.replace(/\s+/g, '')))
-          throw new Error('无法确认下一步按钮文字')
+      claim(value.questionRegionIds, '题干')
+      const notices: string[] = []
+      for (const [key, option] of Object.entries(value.options)) {
+        // The model supplies reading order. Do not re-sort by geometry or enforce local groups.
+        const rows = claim(option.regionIds, `选项 ${key}`)
+        if (!option.regionIds.includes(option.clickRegionId))
+          throw new Error(`选项 ${key} 的点击框不属于该选项`)
+        const body = rows.length > 1 ? rows.filter((r) => r.text.trim() !== key) : rows
+        const ocrText = stripOptionLabel(body.map((r) => r.text).join('\n')).trim()
+        if (!ocrText) throw new Error(`选项 ${key} 引用的 OCR 框没有有效正文`)
+        if (normalizedText(option.text) !== normalizedText(ocrText))
+          notices.push(`选项 ${key} 的文字已采用 OCR 原文，继续执行`)
+        // IDs determine the target; model paraphrasing must neither block nor trigger a retry.
+        // Canonical OCR text also keeps display and personality memory consistent.
+        option.text = ocrText
+      }
+      if (value.next.required) {
+        if (value.next.kind === 'submit') throw new Error('检测到提交操作，请手动确认提交范围')
+        const [button] = claim([value.next.clickRegionId], '下一步')
+        // Recognized submit actions remain manual even if the model mislabeled their kind.
+        if (/提交|交卷|结束考试/.test(button.text))
+          throw new Error('检测到提交操作，请手动确认提交范围')
       }
       result = {
         question: value.question,
-        questionBlockId: block.id,
+        questionRegionIds: value.questionRegionIds,
         answers: value.answers,
+        selectedAnswers: value.selectedAnswers,
+        notices,
         options: value.options,
-        next: value.next
+        next: value.next.required
+          ? { ...value.next, regionIds: [value.next.clickRegionId] }
+          : { required: false }
       }
     } else {
       const parsed = legacySchema.safeParse(json)
@@ -216,6 +181,7 @@ export class AssessmentResponseValidator {
       result = {
         question: value.question,
         answers: value.answers ?? (value.answer ? [value.answer] : []),
+        selectedAnswers: value.selectedAnswers,
         options: Object.fromEntries(
           Object.entries(value.options).map(([key, option]) => [
             key,
@@ -249,6 +215,12 @@ export class AssessmentResponseValidator {
       if (!option.text) throw new Error('选项只有标签，没有有效文本')
     }
     const keys = Object.keys(result.options)
+    if (
+      result.selectedAnswers &&
+      (new Set(result.selectedAnswers).size !== result.selectedAnswers.length ||
+        result.selectedAnswers.some((answer) => !result.answers.includes(answer)))
+    )
+      throw new Error('当前已选答案重复或不属于目标答案')
     if (
       !keys.length ||
       keys.length > 26 ||

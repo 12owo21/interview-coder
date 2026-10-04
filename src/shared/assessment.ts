@@ -12,6 +12,7 @@ export type AssessmentPhase =
   | 'locating'
   | 'clicking'
   | 'waiting'
+  | 'refreshing'
   | 'stopping'
   | 'error'
 
@@ -22,18 +23,8 @@ export interface AssessmentRegion {
   box: Box
 }
 
-export interface OptionCandidate {
-  id: string
-  questionBlockId: string
-  regionIds: string[]
-  labelHint?: string
-  joinedText: string
-}
-
 export interface OcrLayout {
   regions: AssessmentRegion[]
-  blocks: Array<{ id: string; regionIds: string[] }>
-  candidates: OptionCandidate[]
   filter?: OcrResult['filter']
   elapsedMs: number
 }
@@ -53,6 +44,8 @@ export interface AssessmentResult {
   optionTexts: Record<string, string>
   answer: string
   answers: string[]
+  confirmedSelectedAnswers?: string[]
+  notices?: string[]
   options: Record<string, Point>
   next: { required: boolean; point: Point } | null
   imageSize: { width: number; height: number }
@@ -73,6 +66,8 @@ export interface AssessmentDebug {
   image?: string
   layout: OcrLayout
   optionRegions?: Record<string, string[]>
+  questionRegionIds?: string[]
+  nextRegionId?: string
   points?: Array<{ label: string; point: Point }>
 }
 
@@ -98,6 +93,7 @@ export const ASSESSMENT_PHASE_LABELS: Record<AssessmentPhase, string> = {
   locating: '解析点击位置',
   clicking: '执行点击',
   waiting: '等待下一题',
+  refreshing: '等待重新截屏识别',
   stopping: '正在停止，等待当前操作结束',
   error: '已停止：需要处理'
 }

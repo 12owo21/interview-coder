@@ -16,8 +16,8 @@ export function applyContentProtection(window: BrowserWindow, forceReset = false
 export function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width: 800,
+    height: 560,
     title: '',
     frame: false,
     transparent: true,

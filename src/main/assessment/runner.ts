@@ -13,11 +13,13 @@ import type { ScreenshotCapture } from '../take-screenshot'
 import type { CaptureFunction, GuardSession, RunContext } from './types'
 import { AssessmentMemoryService } from './memory-service'
 import { AssessmentPromptBuilder } from './prompt-builder'
-import { OcrLayoutAnalyzer } from './ocr-layout-analyzer'
+import { AssessmentOcrPreparer } from './ocr-regions'
 import { AssessmentResponseValidator } from './response-validator'
 import { AssessmentTargetResolver } from './target-resolver'
 import { AssessmentClickExecutor } from './click-executor'
 import { checkAborted } from './wait'
+import { AssessmentPageChangedError, remainingAnswerSteps } from './recovery'
+import { AssessmentRetrySession, assessmentPageIdentity } from './retry-session'
 
 export interface RunnerDependencies {
   capture: CaptureFunction
@@ -42,7 +44,7 @@ export interface RunnerDependencies {
 }
 
 export class AssessmentRunner {
-  private readonly layoutAnalyzer = new OcrLayoutAnalyzer()
+  private readonly ocrPreparer = new AssessmentOcrPreparer()
   private readonly prompts = new AssessmentPromptBuilder()
   private readonly validator = new AssessmentResponseValidator()
   private readonly targets = new AssessmentTargetResolver()
@@ -52,7 +54,7 @@ export class AssessmentRunner {
   async run(
     context: RunContext,
     update: (patch: Partial<AssessmentSnapshot>) => void,
-    previousPage?: string
+    retry = new AssessmentRetrySession()
   ): Promise<{ preview: boolean; pageKey: string }> {
     const { config, signal, phase } = context
     const deps = this.dependencies
@@ -60,7 +62,6 @@ export class AssessmentRunner {
     checkAborted(signal)
     if (!config.profile.apiKey.trim()) throw new Error('请先在设置 → 做题模式中配置 AI API Key')
     deps.memory.configure(config.memoryEnabled, config.personality)
-    deps.memory.assertCapacity()
     const memory = deps.memory.snapshot()
     phase('capturing')
     const capture = await deps.capture({
@@ -79,7 +80,7 @@ export class AssessmentRunner {
       const ocr = await deps.ocr(Buffer.from(capture.data, 'base64'), signal, config.margins)
       checkAborted(signal)
       ocrMs = Date.now() - ocrStart
-      layout = this.layoutAnalyzer.analyze(ocr, {
+      layout = this.ocrPreparer.prepare(ocr, {
         width: capture.imageWidth,
         height: capture.imageHeight
       })
@@ -92,7 +93,14 @@ export class AssessmentRunner {
       update({ debug })
     }
     phase('analyzing')
-    const prompt = this.prompts.build(config, capture, captureId, memory.context, layout)
+    const prompt = this.prompts.build(
+      config,
+      capture,
+      captureId,
+      memory.context,
+      layout,
+      context.recovery
+    )
     const aiStart = Date.now()
     let raw = ''
     const output = await deps.ask(
@@ -121,18 +129,25 @@ export class AssessmentRunner {
     const memoryInput = { question: parsed.question, options: optionTexts, answers: parsed.answers }
     const matched = deps.memory.match(memoryInput)
     if (matched) parsed.answers = matched
-    // Only a short-lived loop guard, not personality history. Keep question numbers
-    // so explicitly numbered repetitions on another page remain distinguishable.
-    const pageKey = JSON.stringify([
-      parsed.question.normalize('NFKC').replace(/\s+/g, ''),
-      Object.entries(optionTexts)
-        .sort()
-        .map(([key, text]) => [key, text.normalize('NFKC').replace(/\s+/g, '')])
-    ])
-    if (previousPage === pageKey)
-      throw new Error('页面未切换或无法区分重复题，已暂停，避免再次点击取消选项')
+    const identity = assessmentPageIdentity(parsed, layout)
+    const samePage = retry.observe(identity)
+    const pageKey = JSON.stringify(identity)
+    if (context.verificationOnly) {
+      update({ notice: '已确认进入新题，本次任务完成' })
+      return { preview: false, pageKey }
+    }
+    if (samePage)
+      parsed.notices = [
+        ...(parsed.notices ?? []),
+        `页面仍为同一题，正在检查未选项和下一步（重试 ${retry.retryCount}/3）`
+      ]
+    if (!retry.memoryCommitted) deps.memory.assertCapacity()
     phase('locating')
-    const plan = this.targets.resolve(config, parsed, capture, layout)
+    const plan = remainingAnswerSteps(
+      this.targets.resolve(config, parsed, capture, layout),
+      parsed,
+      context.recovery
+    )
     const optionTargets =
       config.strategy === 'fixed'
         ? Object.fromEntries(
@@ -157,6 +172,8 @@ export class AssessmentRunner {
       optionTexts,
       answer: parsed.answers[0],
       answers: parsed.answers,
+      notices: parsed.notices,
+      ...(context.recovery ? { confirmedSelectedAnswers: parsed.selectedAnswers } : {}),
       options: optionTargets,
       next:
         plan.at(-1)?.kind === 'next' ? { required: true, point: plan.at(-1)!.screenPoint } : null,
@@ -177,6 +194,8 @@ export class AssessmentRunner {
         optionRegions: Object.fromEntries(
           Object.entries(parsed.options).map(([key, value]) => [key, value.regionIds!])
         ),
+        questionRegionIds: parsed.questionRegionIds,
+        nextRegionId: parsed.next.clickRegionId,
         points: plan
           .filter((step) => step.imagePoint)
           .map((step) => ({ label: step.answer ?? '下一步', point: step.imagePoint! }))
@@ -185,26 +204,23 @@ export class AssessmentRunner {
     update({
       result: { ...result },
       debug,
-      notice: preview
-        ? 'OCR 预览完成，未执行点击，也未写入记忆'
-        : matched
-          ? '已按历史选项内容保持答案一致'
-          : ''
+      notice: [
+        ...(parsed.notices ?? []),
+        preview
+          ? 'OCR 预览完成，未执行点击，也未写入记忆'
+          : matched
+            ? '已按历史选项内容保持答案一致'
+            : ''
+      ]
+        .filter(Boolean)
+        .join('；')
     })
     if (preview) return { preview: true, pageKey }
     deps.assertClickSupported()
     checkAborted(signal)
-    const selectedIds = new Set(
-      Object.values(parsed.options).flatMap((option) => option.regionIds ?? [])
-    )
-    const firstOptionTop = layout
-      ? Math.min(...layout.regions.filter((r) => selectedIds.has(r.id)).map((r) => r.box.top))
-      : 0
-    const block = layout?.blocks.find((b) => b.id === parsed.questionBlockId)
     const anchors =
-      layout?.regions
-        .filter((r) => block?.regionIds.includes(r.id) && r.box.bottom <= firstOptionTop)
-        .map((r) => r.box) ?? []
+      layout?.regions.filter((r) => parsed.questionRegionIds?.includes(r.id)).map((r) => r.box) ??
+      []
     const guard = layout ? deps.guard.prepare(capture, config.captureRegion, anchors) : undefined
     phase('clicking')
     const clickStart = Date.now()
@@ -226,11 +242,41 @@ export class AssessmentRunner {
         }
       )
       checkAborted(signal)
-      deps.memory.commit({ ...memoryInput, answers: parsed.answers }, memory)
+      if (!retry.memoryCommitted) {
+        deps.memory.commit({ ...memoryInput, answers: parsed.answers }, memory)
+        retry.memoryCommitted = true
+      }
+      retry.recovery = {
+        question: parsed.question,
+        options: optionTexts,
+        intendedAnswers: parsed.answers,
+        executedAnswers: [
+          ...(context.recovery ? (parsed.selectedAnswers ?? []) : []),
+          ...plan.flatMap((step) => (step.answer ? [step.answer] : []))
+        ]
+      }
       result.execution = 'executed'
       update({
-        notice: `已按顺序执行 ${parsed.answers.join(' → ')}${result.next ? '，已执行下一步点击' : ''}；尚未验证网页选中状态`
+        notice: [
+          ...(parsed.notices ?? []),
+          `${context.recovery && parsed.selectedAnswers?.length ? `已跳过当前确认选中的 ${parsed.selectedAnswers.join(' → ')}；` : ''}本轮完成 ${plan.length} 次点击${result.next ? '，包含下一步' : ''}；尚未验证点击后的网页状态`
+        ].join('；')
       })
+    } catch (error) {
+      if (error instanceof AssessmentPageChangedError) {
+        error.recovery = {
+          question: parsed.question,
+          options: optionTexts,
+          intendedAnswers: parsed.answers,
+          executedAnswers: [
+            ...(context.recovery ? (parsed.selectedAnswers ?? []) : []),
+            ...plan
+              .slice(0, result.executedSteps)
+              .flatMap((step) => (step.answer ? [step.answer] : []))
+          ]
+        }
+      }
+      throw error
     } finally {
       result.timings = {
         ...result.timings,

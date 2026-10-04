@@ -80,11 +80,11 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
         </Select>
       </Field>
       <div className="mt-5 space-y-3 border-t border-gray-400/40 pt-4">
-        <Field label="OCR 定位选项" note={assessmentFixedClick ? '固定坐标优先，OCR 定位暂不使用' : '使用本地 OCR 定位文字，AI 只关联文字框和选择答案；支持单列文字选项'}>
+        <Field label="OCR 定位选项" note={assessmentFixedClick ? '固定坐标优先，OCR 定位暂不使用' : '把 OCR 文字框直接交给 AI，由 AI 选择选项与按钮框，程序使用 OCR 坐标点击'}>
           <Switch checked={assessmentOcrEnabled} onCheckedChange={(value) => updateSetting('assessmentOcrEnabled', value)} />
         </Field>
         {assessmentOcrEnabled && !assessmentFixedClick && <>
-          <Field label="仅预览，不点击" note="默认开启；快捷键也只预览一次。确认分组与红点正确后关闭，即可自动点击和循环">
+          <Field label="仅预览，不点击" note="默认关闭；快捷键也只预览一次。确认分组与红点正确后关闭，即可自动点击和循环">
             <Switch checked={assessmentOcrPreviewOnly} onCheckedChange={(value) => updateSetting('assessmentOcrPreviewOnly', value)} />
           </Field>
           <Field label="显示 OCR 分组图" note="显示原截图、选项框与点击红点；预览模式始终显示">

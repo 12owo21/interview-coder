@@ -3,6 +3,7 @@ import type { CaptureRegion } from '../../shared/capture-region'
 import type { OcrFilterMargins } from '../../shared/ocr'
 import type { AssessmentPhase, AssessmentStrategy, Box, Point } from '../../shared/assessment'
 import type { ScreenshotCapture } from '../take-screenshot'
+import type { AssessmentRecovery } from './recovery'
 
 export interface AssessmentConfig {
   profile: ApiProfile
@@ -21,9 +22,14 @@ export interface AssessmentConfig {
 export interface ParsedAssessment {
   question: string
   answers: string[]
-  options: Record<string, { text: string; point?: Point; regionIds?: string[] }>
-  questionBlockId?: string
-  next: { required: boolean; point?: Point; regionIds?: string[] }
+  selectedAnswers?: string[]
+  notices?: string[]
+  options: Record<
+    string,
+    { text: string; point?: Point; regionIds?: string[]; clickRegionId?: string }
+  >
+  questionRegionIds?: string[]
+  next: { required: boolean; point?: Point; regionIds?: string[]; clickRegionId?: string }
 }
 
 export interface RunContext {
@@ -31,6 +37,8 @@ export interface RunContext {
   config: AssessmentConfig
   signal: AbortSignal
   phase: (phase: AssessmentPhase) => void
+  recovery?: AssessmentRecovery
+  verificationOnly?: boolean
 }
 
 export interface GuardSession {

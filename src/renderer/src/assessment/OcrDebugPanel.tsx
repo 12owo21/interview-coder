@@ -20,9 +20,11 @@ export function OcrDebugPanel({ debug }: { debug: AssessmentDebug }) {
       context.drawImage(image, 0, 0, canvas.current.width, canvas.current.height)
       context.lineWidth = 2
       context.font = '12px sans-serif'
-      const groups = debug.optionRegions
+      const groups: Array<[string, string[]]> = debug.optionRegions
         ? Object.entries(debug.optionRegions)
-        : debug.layout.candidates.map((g) => [g.id, g.regionIds] as const)
+        : debug.layout.regions.map((r) => ['OCR', [r.id]])
+      if (debug.questionRegionIds) groups.push(['题干', debug.questionRegionIds])
+      if (debug.nextRegionId) groups.push(['下一步', [debug.nextRegionId]])
       groups.forEach(([label, ids], index) => {
         context.strokeStyle = COLORS[index % COLORS.length]
         context.fillStyle = context.strokeStyle
@@ -55,11 +57,11 @@ export function OcrDebugPanel({ debug }: { debug: AssessmentDebug }) {
 
   return (
     <div className="mt-4 space-y-2 text-xs">
-      <h2 className="text-sm font-medium">OCR 分组与点击位置</h2>
+      <h2 className="text-sm font-medium">OCR 文字框与 AI 选择</h2>
       <p>
         原始 {debug.layout.filter?.originalCount ?? debug.layout.regions.length} 个文字框，过滤{' '}
         {debug.layout.filter?.removedCount ?? 0} 个，保留 {debug.layout.regions.length}{' '}
-        个。红点为候选点击位置。
+        个。分析前显示原始框；分析后显示 AI 选出的题干、选项和按钮，红点为点击位置。
       </p>
       {debug.image ? (
         <canvas
