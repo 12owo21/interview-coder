@@ -16,6 +16,7 @@ const { AssessmentMemoryService, questionKeys, stripQuestionNumber } = load(
 )
 const { AssessmentClickExecutor } = load('src/main/assessment/click-executor.ts')
 const { AssessmentRunner } = load('src/main/assessment/runner.ts')
+const { AssessmentPromptBuilder } = load('src/main/assessment/prompt-builder.ts')
 const { AssessmentController } = load('src/main/assessment/controller.ts')
 const { AssessmentPageChangedError } = load('src/main/assessment/recovery.ts')
 const { AssessmentRetrySession, assessmentPageIdentity } = load(
@@ -334,6 +335,118 @@ function config() {
     nextPosition: { x: 50, y: 60 }
   }
 }
+function currentPromptData(messages) {
+  return JSON.parse(messages[0].content.filter((part) => part.type === 'text').at(-1).text)
+}
+
+for (const strategy of ['ocr', 'fixed', 'model']) {
+  test(`${strategy} prompt keeps system and history prefix identical across recovery captures`, () => {
+    const builder = new AssessmentPromptBuilder()
+    const cfg = { ...config(), strategy }
+    const { ocr } = fixture()
+    const layout =
+      strategy === 'ocr' ? new AssessmentOcrPreparer().prepare(ocr, ocr.imageSize) : undefined
+    const history = '1. 题目：喜欢交流吗？\n选项：A=喜欢；B=不喜欢\n答案顺序：A'
+    const recovery = {
+      question: '当前题目',
+      options: { A: '选项一', B: '选项二' },
+      intendedAnswers: ['B'],
+      executedAnswers: ['B']
+    }
+    const first = builder.build(cfg, capture, 'first-capture', history, layout)
+    const retry = builder.build(
+      cfg,
+      { ...capture, data: 'new-image', imageWidth: 900 },
+      'retry-capture',
+      history,
+      layout ? { ...layout, elapsedMs: 777 } : undefined,
+      recovery
+    )
+    assert.equal(first.system, retry.system)
+    assert.match(first.system, /仅当本轮 JSON 包含 recovery 时/)
+    assert.match(first.system, /不包含 recovery 时，按首次分析处理/)
+    assert.deepEqual(first.messages[0].content[0], retry.messages[0].content[0])
+    assert.deepEqual(
+      retry.messages[0].content.map((p) => p.type),
+      ['text', 'text', 'image']
+    )
+    assert.equal(first.messages[0].content[0].text, `assessmentHistory:\n${history}`)
+    const initialData = currentPromptData(first.messages)
+    const retryData = currentPromptData(retry.messages)
+    assert.equal(initialData.captureId, 'first-capture')
+    assert.equal(initialData.recovery, undefined)
+    assert.equal(retryData.captureId, 'retry-capture')
+    assert.equal(retryData.assessmentHistory, undefined)
+    assert.equal(retryData.imageSize.width, 900)
+    assert.deepEqual(retryData.recovery, recovery)
+    assert.equal(retry.messages[0].content.at(-1).image, 'new-image')
+    if (layout) assert.equal(retryData.ocr.elapsedMs, 777)
+    else assert.equal(retryData.ocr, undefined)
+  })
+}
+
+test('growing personality history preserves the entire prior text prefix from an empty session', () => {
+  const memory = new AssessmentMemoryService()
+  const builder = new AssessmentPromptBuilder()
+  const cfg = config()
+  memory.configure(true, cfg.personality)
+  const build = (id) => builder.build(cfg, capture, id, memory.snapshot().context)
+  const empty = build('empty')
+  memory.commit({
+    question: '1. 喜欢交流吗？',
+    options: { A: '喜欢', B: '不喜欢' },
+    answers: ['A']
+  })
+  const first = build('first')
+  memory.commit({
+    question: '2. 面对挑战会怎样？',
+    options: { A: '主动尝试', B: '回避' },
+    answers: ['A']
+  })
+  const second = build('second')
+  const prefix = (prompt) => `${prompt.system}\n${prompt.messages[0].content[0].text}`
+  assert.ok(prefix(first).startsWith(prefix(empty)))
+  assert.ok(prefix(second).startsWith(prefix(first)))
+  assert.ok(prefix(second).length > prefix(first).length)
+  assert.ok(!prefix(second).includes('second'))
+  assert.equal(
+    second.messages[0].content[0].text,
+    `assessmentHistory:\n${memory.snapshot().context}`
+  )
+})
+
+test('disabling personality omits even a stale history argument and new sessions start empty', () => {
+  const builder = new AssessmentPromptBuilder()
+  const cfg = config()
+  const memory = new AssessmentMemoryService()
+  memory.configure(true, cfg.personality)
+  memory.commit({ question: '旧会话题目', options: { A: '旧会话选项' }, answers: ['A'] })
+  const old = memory.snapshot().context
+  const normal = builder.build({ ...cfg, memoryEnabled: false }, capture, 'normal', old)
+  assert.deepEqual(
+    normal.messages[0].content.map((p) => p.type),
+    ['text', 'image']
+  )
+  assert.ok(!normal.system.includes(cfg.personality))
+  assert.ok(!JSON.stringify(normal.messages).includes('旧会话'))
+  assert.ok(!JSON.stringify(normal.messages).includes('assessmentHistory'))
+  memory.configure(false)
+  memory.configure(true, cfg.personality)
+  const restarted = builder.build(cfg, capture, 'restarted', memory.snapshot().context)
+  assert.equal(restarted.messages[0].content[0].text, 'assessmentHistory:\n')
+  memory.commit({ question: '新会话题目', options: { A: '新选项' }, answers: ['A'] })
+  memory.configure(true, '冷静谨慎')
+  const changed = builder.build(
+    { ...cfg, personality: '冷静谨慎' },
+    capture,
+    'changed',
+    memory.snapshot().context
+  )
+  assert.equal(changed.messages[0].content[0].text, 'assessmentHistory:\n')
+  assert.ok(changed.system.includes('冷静谨慎'))
+  assert.ok(!changed.system.includes(cfg.personality))
+})
+
 function harness(options = {}) {
   const { ocr, response } = fixture()
   const cfg = { ...config(), ...options.config }
@@ -352,7 +465,7 @@ function harness(options = {}) {
     memory,
     ask: async (messages, system, profile, signal, chunk) => {
       prompts.push({ messages, system, profile })
-      const data = JSON.parse(messages[0].content[0].text)
+      const data = currentPromptData(messages)
       response.captureId = data.captureId
       if (options.ask) return options.ask(response, signal, data)
       const raw = JSON.stringify(response)
@@ -423,9 +536,9 @@ test('OCR pipeline clicks ordered first-line centers then next, uses one image a
   assert.deepEqual(h.delays, [500, 500])
   assert.equal(h.guards, 3)
   assert.equal(h.last.result.execution, 'executed')
-  assert.equal(h.prompts[0].messages[0].content[1].image, capture.data)
+  assert.equal(h.prompts[0].messages[0].content.at(-1).image, capture.data)
   assert.equal(h.prompts[0].profile.id, 'p')
-  const sent = JSON.parse(h.prompts[0].messages[0].content[0].text)
+  const sent = currentPromptData(h.prompts[0].messages)
   assert.equal(sent.ocr.regions.length, fixture().ocr.regions.length)
   assert.equal(sent.ocr.blocks, undefined)
   assert.equal(sent.ocr.candidates, undefined)
@@ -586,8 +699,8 @@ for (const failGuardAt of [1, 2, 3]) {
       { x: 1300, y: 1630 }
     ])
     assert.deepEqual(waits, [3000])
-    const first = JSON.parse(h.prompts[0].messages[0].content[0].text)
-    const retry = JSON.parse(h.prompts[1].messages[0].content[0].text)
+    const first = currentPromptData(h.prompts[0].messages)
+    const retry = currentPromptData(h.prompts[1].messages)
     assert.notEqual(first.captureId, retry.captureId)
     assert.deepEqual(retry.recovery.executedAnswers, ['B', 'A'].slice(0, failGuardAt - 1))
     assert.equal(retry.assessmentHistory, undefined)

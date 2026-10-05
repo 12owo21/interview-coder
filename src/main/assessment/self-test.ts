@@ -121,8 +121,10 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
       }),
       ask: async (messages, _system, _profile, _signal, chunk) => {
         const part = messages[0].content
-        assert.ok(Array.isArray(part) && part[0].type === 'text')
-        const data = JSON.parse(part[0].text) as {
+        assert.ok(Array.isArray(part))
+        const current = part.filter((entry) => entry.type === 'text').at(-1)
+        assert.ok(current)
+        const data = JSON.parse(current.text) as {
           captureId: string
           ocr: OcrLayout
           recovery?: AssessmentRecovery
