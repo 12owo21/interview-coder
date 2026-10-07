@@ -3,6 +3,7 @@ import type { ClickStep } from '../../shared/assessment'
 
 /** Transient execution context, independent from personality memory. Never contains old coordinates. */
 export interface AssessmentRecovery {
+  progress?: string
   question: string
   options: Record<string, string>
   intendedAnswers: string[]

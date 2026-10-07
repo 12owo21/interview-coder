@@ -8,6 +8,7 @@ import { useAppStore } from '@/lib/store/app'
 import { ASSESSMENT_PHASE_LABELS } from '../../../shared/assessment'
 import { useAssessmentStore } from '@/lib/store/assessment'
 import { OcrDebugPanel } from './OcrDebugPanel'
+import { ScoreResultPanel } from './ScoreResultPanel'
 
 function parsePoint(value: string): { x: number; y: number } | null {
   const parts = value.split(/[,，\s]+/).filter(Boolean)
@@ -173,6 +174,7 @@ export default function AssessmentPage() {
           </p>
           {snapshot?.debug && <OcrDebugPanel debug={snapshot.debug} />}
           {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
+          {result?.scoring && <ScoreResultPanel scoring={result.scoring} />}
           {result && (
             <pre className="mt-4 max-h-64 overflow-auto rounded-md bg-black/10 p-3 text-xs">
               {JSON.stringify(result, null, 2)}

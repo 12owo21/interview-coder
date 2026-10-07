@@ -6,6 +6,7 @@ import { AssessmentController } from './controller'
 import { AssessmentClickExecutor } from './click-executor'
 import { AssessmentPageGuard } from './page-guard'
 import { AssessmentMemoryService } from './memory-service'
+import { AssessmentScoreMemoryService, normalizeScoreText } from './score-memory-service'
 import { stripOptionLabel } from './ocr-regions'
 import { recognizeLocalPng, stopLocalOcrService } from '../ocr'
 import type { AssessmentConfig } from './types'
@@ -61,6 +62,7 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
       }
     }
     const memory = new AssessmentMemoryService()
+    const scoreMemory = new AssessmentScoreMemoryService()
     const config: AssessmentConfig = {
       profile: {
         id: 'test',
@@ -76,6 +78,8 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
       showDebug: true,
       margins: { top: 100, bottom: 100, left: 100, right: 100 },
       memoryEnabled: true,
+      mostLeastEnabled: false,
+      checkSelectedAnswers: true,
       personality: '开朗',
       fixedPositions: {},
       nextPosition: null,
@@ -93,6 +97,7 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
       capture,
       ocr: recognizeLocalPng,
       memory,
+      scoreMemory,
       guard: new AssessmentPageGuard(capture),
       assertClickSupported: () => undefined,
       executor: new AssessmentClickExecutor(async (point) => {
@@ -162,7 +167,19 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
           status: 'ok',
           questionRegionIds: [stem.id],
           question: stem.text,
-          answers: ['B', 'A'],
+          ...(config.mostLeastEnabled
+            ? {
+                mode: 'most_least',
+                newScores: Object.fromEntries(
+                  Object.entries(options)
+                    .filter(
+                      ([, option]) =>
+                        !scoreMemory.snapshot().scores.has(normalizeScoreText(option.text))
+                    )
+                    .map(([key]) => [key, key === 'B' ? 9500 : 7000])
+                )
+              }
+            : { answers: ['B', 'A'] }),
           options,
           ...(data.recovery
             ? {
@@ -226,6 +243,27 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
     assert.equal((memory.snapshot().context.match(/题目：/g)?.length ?? 0) - beforeRecords, 1)
     assert.equal(recoveryRequests, 3)
     report.missedNextRecovered = controller.getSnapshot().result
+    finishAfterNext = false
+    config.mostLeastEnabled = true
+    config.preview = true
+    await window.webContents.executeJavaScript('window.hits=[]')
+    assert.equal(await controller.runOnce(), true, controller.getSnapshot().error ?? '')
+    assert.deepEqual(await window.webContents.executeJavaScript('window.hits'), [])
+    assert.equal(scoreMemory.snapshot().scores.size, 0)
+    assert.equal(memory.snapshot().context, '')
+    report.scoringPreview = controller.getSnapshot().result
+    config.preview = false
+    assert.equal(await controller.runOnce(), true, controller.getSnapshot().error ?? '')
+    assert.deepEqual(await window.webContents.executeJavaScript('window.hits'), ['B', 'A', 'next'])
+    assert.equal(scoreMemory.snapshot().scores.size, 2)
+    assert.equal(controller.getSnapshot().result?.scoring?.options.B.source, 'current')
+    report.scoringExecuted = controller.getSnapshot().result
+    await window.webContents.executeJavaScript('window.hits=[]')
+    assert.equal(await controller.runOnce(), true, controller.getSnapshot().error ?? '')
+    assert.deepEqual(await window.webContents.executeJavaScript('window.hits'), ['B', 'A', 'next'])
+    assert.equal(controller.getSnapshot().result?.scoring?.options.B.source, 'history')
+    assert.equal(memory.snapshot().context, '')
+    report.scoringReused = controller.getSnapshot().result
     report.checks = [
       'real-local-OCR',
       'model-selected-multiline-regions',
@@ -236,7 +274,10 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
       'page-change-recapture-and-reanalyze',
       'button-color-recovery-without-repeat-clicks',
       'missed-next-recovery-without-reselecting-or-duplicate-memory',
-      'session-memory'
+      'session-memory',
+      'scoring-preview-zero-writes',
+      'scoring-highest-lowest-ordered-clicks',
+      'scoring-reuses-history-and-isolates-ordinary-memory'
     ]
     report.passed = true
   } catch (error) {

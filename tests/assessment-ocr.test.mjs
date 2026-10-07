@@ -327,6 +327,7 @@ function config() {
     preview: false,
     showDebug: true,
     memoryEnabled: true,
+    checkSelectedAnswers: true,
     personality: '开朗',
     margins: { top: 100, bottom: 100, left: 100, right: 100 },
     captureScreen: 'cursor',
@@ -821,6 +822,24 @@ test('ordinary errors are not retried as page changes', async () => {
   assert.equal(await c.runOnce(), false)
   assert.equal(calls, 1)
   assert.equal(c.getSnapshot().error, 'AI format error')
+})
+
+test('ordinary answers repair truncated JSON and missing fields before executing once', async () => {
+  let calls = 0
+  const h = harness({
+    ask: async (r) => {
+      calls++
+      if (calls === 1) return '{"question":'
+      if (calls === 2) return JSON.stringify({ ...r, answers: undefined })
+      return JSON.stringify(r)
+    }
+  })
+  await h.run()
+  assert.equal(calls, 3)
+  assert.equal(h.clicks.length, 3)
+  assert.equal(h.memory.snapshot().context.match(/题目：/g).length, 1)
+  assert.match(h.prompts[1].messages.at(-1).content, /JSON 无效或不完整/)
+  assert.deepEqual(h.prompts[0].messages[0], h.prompts[2].messages[0])
 })
 
 for (const selected of [undefined, ['A'], ['B', 'B'], ['C']]) {

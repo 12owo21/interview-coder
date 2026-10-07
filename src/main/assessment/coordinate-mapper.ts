@@ -1,3 +1,4 @@
+import { ModelResultValidationError } from '../model-result-retry'
 import type { Point } from '../../shared/assessment'
 import type { ScreenshotCapture } from '../take-screenshot'
 
@@ -23,7 +24,7 @@ export function imageToScreen(point: Point, capture: ScreenshotCapture): Point {
     point.x >= capture.imageWidth ||
     point.y >= capture.imageHeight
   )
-    throw new Error('点击位置超出截图范围')
+    throw new ModelResultValidationError('点击位置超出截图范围')
   if (
     ![capture.fullWidth, capture.fullHeight, capture.physicalWidth, capture.physicalHeight].every(
       (n) => Number.isFinite(n) && n > 0

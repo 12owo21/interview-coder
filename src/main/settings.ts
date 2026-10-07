@@ -4,7 +4,8 @@ import type { ApiProfile, AppMode } from '../shared/api-profile'
 import type { HintMode } from '../shared/conversation'
 import { DEFAULT_OCR_FILTER_MARGINS, normalizeOcrFilterMargins } from '../shared/ocr'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
-import { assessmentMemory } from './assessment-memory'
+import { assessmentMemory, assessmentScoreMemory } from './assessment-memory'
+import { configureAssessmentSessions } from './assessment/memory-sessions'
 
 const settingsListeners = new Set<() => void>()
 export function onSettingsChanged(listener: () => void): void {
@@ -27,8 +28,17 @@ ipcMain.handle('updateAppSettings', (_event, _settings) => {
   if ('ocrFilterMargins' in _settings) {
     settings.ocrFilterMargins = normalizeOcrFilterMargins(_settings.ocrFilterMargins)
   }
-  if ('assessmentMemoryEnabled' in _settings || 'assessmentPersonalityPrompt' in _settings) {
-    assessmentMemory.configure(settings.assessmentMemoryEnabled, settings.assessmentPersonalityPrompt.trim() || DEFAULT_ASSESSMENT_PERSONALITY_PROMPT)
+  if (
+    'assessmentMemoryEnabled' in _settings ||
+    'assessmentPersonalityPrompt' in _settings ||
+    'assessmentMostLeastEnabled' in _settings
+  ) {
+    configureAssessmentSessions(assessmentMemory, assessmentScoreMemory, {
+      memoryEnabled: settings.assessmentMemoryEnabled,
+      mostLeastEnabled: settings.assessmentMostLeastEnabled,
+      personality:
+        settings.assessmentPersonalityPrompt.trim() || DEFAULT_ASSESSMENT_PERSONALITY_PROMPT
+    })
   }
   for (const listener of settingsListeners) listener()
   if ('hideDockIcon' in _settings) {
@@ -97,6 +107,8 @@ export const settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  assessmentMostLeastEnabled: false,
+  assessmentCheckSelectedAnswers: true,
   assessmentOcrEnabled: false,
   assessmentOcrPreviewOnly: false,
   assessmentShowOcrDebug: false,

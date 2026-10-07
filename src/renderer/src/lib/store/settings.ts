@@ -231,6 +231,8 @@ interface Settings {
   /** The profile used by the experimental 做题 mode */
   assessmentProfileId: string
   assessmentMemoryEnabled: boolean
+  assessmentMostLeastEnabled: boolean
+  assessmentCheckSelectedAnswers: boolean
   assessmentOcrEnabled: boolean
   assessmentOcrPreviewOnly: boolean
   assessmentShowOcrDebug: boolean
@@ -387,6 +389,8 @@ const defaultSettings: Settings = {
   conversationProfileId: '',
   assessmentProfileId: '',
   assessmentMemoryEnabled: false,
+  assessmentMostLeastEnabled: false,
+  assessmentCheckSelectedAnswers: true,
   assessmentOcrEnabled: false,
   assessmentOcrPreviewOnly: false,
   assessmentShowOcrDebug: false,

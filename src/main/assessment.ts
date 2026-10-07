@@ -10,7 +10,7 @@ import { recognizeLocalPng } from './ocr'
 import { getAssessmentStream } from './ai'
 import { consumeStream, extractErrorMessage } from './stream'
 import { clickScreenPoint } from './click'
-import { assessmentMemory } from './assessment-memory'
+import { assessmentMemory, assessmentScoreMemory } from './assessment-memory'
 import { AssessmentController } from './assessment/controller'
 import { AssessmentRunner } from './assessment/runner'
 import { AssessmentClickExecutor } from './assessment/click-executor'
@@ -34,6 +34,8 @@ function readConfig(): AssessmentConfig {
     fixedPositions: structuredClone(settings.assessmentFixedPositions),
     nextPosition: settings.assessmentNextPosition ? { ...settings.assessmentNextPosition } : null,
     memoryEnabled: settings.assessmentMemoryEnabled,
+    mostLeastEnabled: settings.assessmentMostLeastEnabled,
+    checkSelectedAnswers: settings.assessmentCheckSelectedAnswers,
     personality:
       settings.assessmentPersonalityPrompt.trim() || DEFAULT_ASSESSMENT_PERSONALITY_PROMPT,
     captureScreen: settings.captureScreen,
@@ -66,6 +68,7 @@ const runner = new AssessmentRunner({
   capture: takeScreenshotWithMetadata,
   ocr: recognizeLocalPng,
   memory: assessmentMemory,
+  scoreMemory: assessmentScoreMemory,
   executor: new AssessmentClickExecutor(clickScreenPoint),
   guard: new AssessmentPageGuard(takeScreenshotWithMetadata),
   assertClickSupported: () => {
@@ -125,6 +128,7 @@ ipcMain.handle('assessment:get-snapshot', () => assessmentController.getSnapshot
 ipcMain.handle('assessment:reset-memory', () => {
   assessmentController.stop('已开始新测评，旧任务正在结束')
   assessmentMemory.reset()
+  assessmentScoreMemory.reset()
 })
 ipcMain.handle('click-screen-point', (_event, point: { x: number; y: number }) =>
   assessmentController.runManual(() => clickScreenPoint(point))

@@ -29,7 +29,8 @@ export default function App() {
   useEffect(() => {
     window.api.getAppSettings().then((settings) => {
       const blankFields = Object.keys(settings).filter(
-        (key) => settings[key] && !settingsStore[key]
+        // An explicitly disabled selection check must survive the main process's true default.
+        (key) => key !== 'assessmentCheckSelectedAnswers' && settings[key] && !settingsStore[key]
       )
       settingsStore.syncSettings(
         blankFields.reduce(

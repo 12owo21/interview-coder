@@ -1,4 +1,5 @@
 import type { OcrResult } from './ocr'
+import type { AssessmentScoringResult } from './assessment-scoring'
 
 export type Point = { x: number; y: number }
 export type Box = { left: number; top: number; right: number; bottom: number }
@@ -39,6 +40,7 @@ export interface ClickStep {
 }
 
 export interface AssessmentResult {
+  scoring?: AssessmentScoringResult
   raw: string
   question: string
   optionTexts: Record<string, string>

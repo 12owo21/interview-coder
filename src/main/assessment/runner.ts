@@ -1,3 +1,4 @@
+import { ModelResultValidationError, ValidatedModelRequest } from '../model-result-retry'
 import { randomUUID } from 'node:crypto'
 import type { ModelMessage } from 'ai'
 import type { ApiProfile } from '../../shared/api-profile'
@@ -20,6 +21,10 @@ import { AssessmentClickExecutor } from './click-executor'
 import { checkAborted } from './wait'
 import { AssessmentPageChangedError, remainingAnswerSteps } from './recovery'
 import { AssessmentRetrySession, assessmentPageIdentity } from './retry-session'
+import { AssessmentScoreMemoryService } from './score-memory-service'
+import { AssessmentScoreDecision } from './score-decision'
+import { configureAssessmentSessions } from './memory-sessions'
+import { validateScoreRecovery } from './score-recovery'
 
 export interface RunnerDependencies {
   capture: CaptureFunction
@@ -32,6 +37,7 @@ export interface RunnerDependencies {
     chunk: (text: string) => void
   ) => Promise<string>
   memory: AssessmentMemoryService
+  scoreMemory?: AssessmentScoreMemoryService
   executor: AssessmentClickExecutor
   guard: {
     prepare: (
@@ -47,9 +53,14 @@ export class AssessmentRunner {
   private readonly ocrPreparer = new AssessmentOcrPreparer()
   private readonly prompts = new AssessmentPromptBuilder()
   private readonly validator = new AssessmentResponseValidator()
+  private readonly validatedRequest = new ValidatedModelRequest()
   private readonly targets = new AssessmentTargetResolver()
+  private readonly scoreDecision = new AssessmentScoreDecision()
+  private readonly scoreMemory: AssessmentScoreMemoryService
 
-  constructor(private readonly dependencies: RunnerDependencies) {}
+  constructor(private readonly dependencies: RunnerDependencies) {
+    this.scoreMemory = dependencies.scoreMemory ?? new AssessmentScoreMemoryService()
+  }
 
   async run(
     context: RunContext,
@@ -57,12 +68,14 @@ export class AssessmentRunner {
     retry = new AssessmentRetrySession()
   ): Promise<{ preview: boolean; pageKey: string }> {
     const { config, signal, phase } = context
+    const checkSelectedAnswers = config.checkSelectedAnswers !== false
     const deps = this.dependencies
     const started = Date.now()
     checkAborted(signal)
     if (!config.profile.apiKey.trim()) throw new Error('请先在设置 → 做题模式中配置 AI API Key')
-    deps.memory.configure(config.memoryEnabled, config.personality)
+    configureAssessmentSessions(deps.memory, this.scoreMemory, config)
     const memory = deps.memory.snapshot()
+    const scoreSnapshot = this.scoreMemory.snapshot()
     phase('capturing')
     const capture = await deps.capture({
       captureScreen: config.captureScreen,
@@ -97,39 +110,111 @@ export class AssessmentRunner {
       config,
       capture,
       captureId,
-      memory.context,
+      config.mostLeastEnabled ? scoreSnapshot.context : memory.context,
       layout,
       context.recovery
     )
     const aiStart = Date.now()
-    let raw = ''
-    const output = await deps.ask(
-      prompt.messages,
-      prompt.system,
-      config.profile,
+    const { output, value } = await this.validatedRequest.run({
+      messages: prompt.messages,
       signal,
-      (chunk) => {
-        checkAborted(signal)
-        raw += chunk
-        if (raw.length > 131072) throw new Error('AI 输出超过 128K 字符限制')
+      request: async (messages) => {
+        phase('analyzing')
+        let raw = ''
+        let oversized = false
         update({ raw })
+        try {
+          return await deps.ask(messages, prompt.system, config.profile, signal, (chunk) => {
+            checkAborted(signal)
+            raw += chunk
+            if (raw.length > 131072) {
+              oversized = true
+              throw new ModelResultValidationError(
+                'AI 输出超过 128K 字符限制，请精简并返回完整 JSON'
+              )
+            }
+            update({ raw })
+          })
+        } catch (error) {
+          // Stream adapters may wrap callback errors; keep the original validation category.
+          if (oversized)
+            throw new ModelResultValidationError('AI 输出超过 128K 字符限制，请精简并返回完整 JSON')
+          throw error
+        }
+      },
+      validate: (response) => {
+        phase('validating')
+        const parsed = this.validator.parseAndValidate(response, {
+          strategy: config.strategy,
+          mostLeastEnabled: config.mostLeastEnabled,
+          checkSelectedAnswers,
+          requiresSelectedAnswers: checkSelectedAnswers && !!context.recovery,
+          captureId,
+          layout
+        })
+        const optionTexts = Object.fromEntries(
+          Object.entries(parsed.options).map(([letter, option]) => [letter, option.text])
+        )
+        const identity = assessmentPageIdentity(parsed, layout)
+        if (config.mostLeastEnabled) validateScoreRecovery(parsed, context.recovery, identity)
+        const decision = config.mostLeastEnabled
+          ? this.scoreDecision.decide(parsed.options, parsed.newScores!, scoreSnapshot)
+          : undefined
+        if (decision) {
+          parsed.answers = decision.answers
+          parsed.notices = [...(parsed.notices ?? []), ...decision.notices]
+        }
+        const memoryInput = {
+          question: parsed.question,
+          options: optionTexts,
+          answers: parsed.answers
+        }
+        const matched = config.mostLeastEnabled ? undefined : deps.memory.match(memoryInput)
+        if (matched) parsed.answers = matched
+        const plan = remainingAnswerSteps(
+          this.targets.resolve(config, parsed, capture, layout),
+          parsed,
+          checkSelectedAnswers ? context.recovery : undefined
+        )
+        const optionTargets =
+          config.strategy === 'fixed'
+            ? Object.fromEntries(
+                Object.keys(parsed.options)
+                  .filter((key) => config.fixedPositions[key])
+                  .map((key) => [key, config.fixedPositions[key]!])
+              )
+            : Object.fromEntries(
+                this.targets
+                  .resolve(
+                    config,
+                    { ...parsed, answers: Object.keys(parsed.options), next: { required: false } },
+                    capture,
+                    layout
+                  )
+                  .map((step) => [step.answer!, step.screenPoint])
+              )
+        return {
+          parsed,
+          optionTexts,
+          identity,
+          decision,
+          memoryInput,
+          matched,
+          plan,
+          optionTargets
+        }
+      },
+      onRetry: (attempt, error) => {
+        update({
+          error: null,
+          notice: `AI 返回结果不完整或格式错误，正在重试 ${attempt}/3：${error}`
+        })
       }
-    )
+    })
     checkAborted(signal)
     const aiMs = Date.now() - aiStart
-    phase('validating')
-    const parsed = this.validator.parseAndValidate(output, {
-      strategy: config.strategy,
-      captureId,
-      layout
-    })
-    const optionTexts = Object.fromEntries(
-      Object.entries(parsed.options).map(([letter, value]) => [letter, value.text])
-    )
-    const memoryInput = { question: parsed.question, options: optionTexts, answers: parsed.answers }
-    const matched = deps.memory.match(memoryInput)
-    if (matched) parsed.answers = matched
-    const identity = assessmentPageIdentity(parsed, layout)
+    const { parsed, optionTexts, identity, decision, memoryInput, matched, plan, optionTargets } =
+      value
     const samePage = retry.observe(identity)
     const pageKey = JSON.stringify(identity)
     if (context.verificationOnly) {
@@ -141,33 +226,12 @@ export class AssessmentRunner {
         ...(parsed.notices ?? []),
         `页面仍为同一题，正在检查未选项和下一步（重试 ${retry.retryCount}/3）`
       ]
-    if (!retry.memoryCommitted) deps.memory.assertCapacity()
+    if (!config.mostLeastEnabled && !retry.memoryCommitted) deps.memory.assertCapacity()
     phase('locating')
-    const plan = remainingAnswerSteps(
-      this.targets.resolve(config, parsed, capture, layout),
-      parsed,
-      context.recovery
-    )
-    const optionTargets =
-      config.strategy === 'fixed'
-        ? Object.fromEntries(
-            Object.keys(parsed.options)
-              .filter((key) => config.fixedPositions[key])
-              .map((key) => [key, config.fixedPositions[key]!])
-          )
-        : Object.fromEntries(
-            this.targets
-              .resolve(
-                config,
-                { ...parsed, answers: Object.keys(parsed.options), next: { required: false } },
-                capture,
-                layout
-              )
-              .map((step) => [step.answer!, step.screenPoint])
-          )
     const preview = config.strategy === 'ocr' && config.preview
     const result: AssessmentResult = {
       raw: output,
+      ...(decision ? { scoring: decision.scoring } : {}),
       question: parsed.question,
       optionTexts,
       answer: parsed.answers[0],
@@ -222,6 +286,7 @@ export class AssessmentRunner {
       layout?.regions.filter((r) => parsed.questionRegionIds?.includes(r.id)).map((r) => r.box) ??
       []
     const guard = layout ? deps.guard.prepare(capture, config.captureRegion, anchors) : undefined
+    if (decision) this.scoreMemory.commit(decision.additions, scoreSnapshot)
     phase('clicking')
     const clickStart = Date.now()
     try {
@@ -242,11 +307,12 @@ export class AssessmentRunner {
         }
       )
       checkAborted(signal)
-      if (!retry.memoryCommitted) {
+      if (!config.mostLeastEnabled && !retry.memoryCommitted) {
         deps.memory.commit({ ...memoryInput, answers: parsed.answers }, memory)
         retry.memoryCommitted = true
       }
       retry.recovery = {
+        ...(config.mostLeastEnabled ? { progress: identity.progress } : {}),
         question: parsed.question,
         options: optionTexts,
         intendedAnswers: parsed.answers,
@@ -265,6 +331,7 @@ export class AssessmentRunner {
     } catch (error) {
       if (error instanceof AssessmentPageChangedError) {
         error.recovery = {
+          ...(config.mostLeastEnabled ? { progress: identity.progress } : {}),
           question: parsed.question,
           options: optionTexts,
           intendedAnswers: parsed.answers,

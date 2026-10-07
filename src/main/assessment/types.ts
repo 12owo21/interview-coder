@@ -14,6 +14,8 @@ export interface AssessmentConfig {
   fixedPositions: Record<string, Point | null>
   nextPosition: Point | null
   memoryEnabled: boolean
+  mostLeastEnabled: boolean
+  checkSelectedAnswers: boolean
   personality: string
   captureScreen: string
   captureRegion: CaptureRegion | null
@@ -22,6 +24,7 @@ export interface AssessmentConfig {
 export interface ParsedAssessment {
   question: string
   answers: string[]
+  newScores?: Record<string, number>
   selectedAnswers?: string[]
   notices?: string[]
   options: Record<
