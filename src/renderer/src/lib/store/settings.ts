@@ -396,7 +396,7 @@ const defaultSettings: Settings = {
   assessmentShowOcrDebug: false,
   ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
   assessmentPersonalityPrompt:
-    '我是一个积极、活泼、开朗、乐于沟通、具有团队合作精神的人，做选择时倾向于表现出自信、稳定、友善和积极主动。',
+    '我活泼开朗，乐于沟通，有团队合作精神；情绪稳定，自制力较强，行动前会考虑后果。自信但不自负，认真负责但不过度追求完美，能兼顾质量与效率，尊重他人的贡献。',
   assessmentFixedClick: false,
   assessmentFixedPositions: { A: null, B: null, C: null, D: null },
   assessmentNextPosition: null,
