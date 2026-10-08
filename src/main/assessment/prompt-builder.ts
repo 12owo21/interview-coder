@@ -26,7 +26,7 @@ export class AssessmentPromptBuilder {
         ? SCORE_INSTRUCTIONS.join('\n')
         : '只输出一个完整 JSON 对象。question 返回完整题干。answers 是有序且不重复的大写字母数组，单选一个，多选多个，顺序题严格按点击顺序，不要排序。',
       'options 必须包含当前题目所有实际选项，不补齐四项。支持 A-Z。页面没有字母且排列明确时，按从上到下顺序编号；字母看不清不代表没有字母。',
-      '仅明确的“下一步/下一题/继续”可以作为下一步。交卷、提交子卷、提交等操作返回 kind="submit"，程序将停止请用户处理；没有按钮 next={"required":false}。'
+      '仅明确的“下一步/下一题/继续/确定”可以作为下一步。交卷、提交子卷、提交等操作返回 kind="submit"，程序将停止请用户处理；没有按钮 next={"required":false}。'
     ]
     if (config.memoryEnabled || config.mostLeastEnabled)
       common.unshift(
