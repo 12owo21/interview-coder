@@ -285,7 +285,7 @@ export class AssessmentRunner {
     checkAborted(signal)
     // Validate parking before any click. It must not redirect the next cursor-based capture.
     const parkingPoint = config.mouseParkingEnabled
-      ? randomParkingPoint(config.mouseParkingRegion, capture)
+      ? randomParkingPoint(config.mouseParkingRegions, capture)
       : undefined
     const anchors =
       layout?.regions.filter((r) => parsed.questionRegionIds?.includes(r.id)).map((r) => r.box) ??

@@ -20,7 +20,7 @@ import { settings, getModeProfile } from './settings'
 import { getTranscriptionText, clearTranscriptionText } from './transcription'
 import { consumeStream, extractErrorMessage, isImageInputRefused } from './stream'
 import { requestHint, stopHints, clearConversation } from './conversation'
-import { assessmentController, stopAssessmentLoop, toggleAssessmentLoop } from './assessment'
+import { stopAssessmentLoop, toggleAssessmentLoop } from './assessment'
 
 type Shortcut = {
   action: string
@@ -813,21 +813,6 @@ ipcMain.handle('setIgnoreMouse', (_event, ignore: boolean) => {
 })
 
 ipcMain.handle('pickCaptureRegion', () => pickRegion())
-ipcMain.handle('assessment:pick-mouse-parking-region', async () => {
-  let region: CaptureRegion | null = null
-  await assessmentController.runManual(async (signal) => {
-    const mainWindow = global.mainWindow
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    const wasHidden = isWindowSoftHidden
-    softHideWindow(mainWindow)
-    try {
-      region = await pickCaptureRegion(settings.assessmentMouseParkingRegion, 'parking', signal)
-    } finally {
-      if (!wasHidden && !mainWindow.isDestroyed()) restoreSoftHiddenWindow(mainWindow)
-    }
-  })
-  return region
-})
 
 ipcMain.handle('sendFollowUpQuestion', async (_event, question: string) => {
   const mainWindow = global.mainWindow

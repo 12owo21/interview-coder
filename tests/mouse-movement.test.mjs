@@ -33,7 +33,7 @@ test('linear path stays on the segment, progresses in time and reaches exact end
   }
 })
 
-test('parking uses full physical display origin and scale, independent of image crop', () => {
+test('parking keeps absolute physical coordinates unchanged by display scale or image crop', () => {
   const capture = {
     displayId: '2',
     physicalWidth: 2560,
@@ -43,12 +43,49 @@ test('parking uses full physical display origin and scale, independent of image 
     offsetX: 400,
     offsetY: 500
   }
-  const region = { displayId: '2', x: 0.8, y: 0.1, width: 0.1, height: 0.2 }
-  const first = randomParkingPoint(region, capture, () => 0)
-  const last = randomParkingPoint(region, capture, () => 0.999999)
+  const region = { id: 'one', left: 3968, top: 144, right: 4223, bottom: 431 }
+  const first = randomParkingPoint([region], capture, () => 0)
+  const last = randomParkingPoint([region], capture, () => 0.999999)
   assert.ok(first.x >= 1920 + 2048 && last.x < 1920 + 2304)
   assert.ok(first.y >= 144 && last.y < 432)
   assert.notDeepEqual(first, last)
+})
+
+test('parking chooses regions uniformly rather than weighting them by area', () => {
+  const capture = { physicalWidth: 2000, physicalHeight: 1200, originX: 0, originY: 0 }
+  const small = { id: 'small', left: 0, top: 0, right: 2, bottom: 2 }
+  const large = { id: 'large', left: 100, top: 100, right: 1900, bottom: 1100 }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+  const sample = (choice) => {
+    const random = [choice, 0.5, 0.5]
+    return randomParkingPoint([small, large], capture, () => random.shift())
+  }
+  assert.deepEqual(sample(0), { x: 1, y: 1 })
+  assert.deepEqual(sample(0.4999), { x: 1, y: 1 })
+  assert.deepEqual(sample(0.5), { x: 1000, y: 600 })
+  assert.deepEqual(sample(0.9999), { x: 1000, y: 600 })
+  assert.deepEqual(
+    randomParkingPoint([small], capture, () => 0.9999),
+    { x: 2, y: 2 }
+  )
+})
+
+test('parking rejects empty lists, inverted corners, fractions and any out-of-screen region', () => {
+  const capture = { physicalWidth: 1920, physicalHeight: 1080, originX: 0, originY: 0 }
+  const valid = { id: 'one', left: 1800, top: 1000, right: 1919, bottom: 1079 }
+  for (const regions of [
+    [],
+    null,
+    [null],
+    [{ ...valid, left: -1 }],
+    [{ ...valid, right: 1800 }],
+    [{ ...valid, bottom: 1000 }],
+    [{ ...valid, left: 1800.5 }],
+    [valid, { ...valid, id: 'two', right: 1920 }],
+    [valid, { ...valid, id: 'two', bottom: 1080 }]
+  ])
+    assert.throws(() => randomParkingPoint(regions, capture), /停放区域/)
+  assert.doesNotThrow(() => randomParkingPoint([valid], capture))
 })
 
 // Execute the actual PowerShell protocol with an in-memory C# cursor. No real

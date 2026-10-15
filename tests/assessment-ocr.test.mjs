@@ -535,11 +535,11 @@ function harness(options = {}) {
   }
 }
 
-const parkingRegion = { displayId: '1', x: 0.8, y: 0.1, width: 0.1, height: 0.2 }
+const parkingRegion = { id: 'one', left: 1600, top: 200, right: 1799, bottom: 599 }
 
 test('parking runs once after all answer and next clicks, forwarding movement setting', async () => {
   const h = harness({
-    config: { mouseParkingEnabled: true, mouseParkingRegion: parkingRegion, smoothMouse: true }
+    config: { mouseParkingEnabled: true, mouseParkingRegions: [parkingRegion], smoothMouse: true }
   })
   const signal = new AbortController().signal
   await h.run(signal)
@@ -565,10 +565,10 @@ test('parking disabled and preview never move; preview does not require parking 
 test('invalid parking configuration stops before any click or answer-memory commit', async () => {
   for (const region of [
     null,
-    { ...parkingRegion, displayId: 'disconnected' },
-    { ...parkingRegion, width: NaN }
+    { ...parkingRegion, right: 3000 },
+    { ...parkingRegion, right: NaN }
   ]) {
-    const h = harness({ config: { mouseParkingEnabled: true, mouseParkingRegion: region } })
+    const h = harness({ config: { mouseParkingEnabled: true, mouseParkingRegions: [region] } })
     await assert.rejects(h.run(), /停放区域/)
     assert.equal(h.clicks.length, 0)
     assert.equal(h.parked.length, 0)
@@ -578,7 +578,7 @@ test('invalid parking configuration stops before any click or answer-memory comm
 
 test('parking failure preserves completed clicks and memory without page-recovery retry', async () => {
   const h = harness({
-    config: { mouseParkingEnabled: true, mouseParkingRegion: parkingRegion },
+    config: { mouseParkingEnabled: true, mouseParkingRegions: [parkingRegion] },
     onPark: () => {
       throw new AssessmentPageChangedError('test parking failure')
     }
@@ -595,7 +595,7 @@ test('parking failure preserves completed clicks and memory without page-recover
 test('cancellation after a click prevents subsequent clicks and parking', async () => {
   const controller = new AbortController()
   const h = harness({
-    config: { mouseParkingEnabled: true, mouseParkingRegion: parkingRegion },
+    config: { mouseParkingEnabled: true, mouseParkingRegions: [parkingRegion] },
     onClick: () => controller.abort()
   })
   await assert.rejects(h.run(controller.signal), /停止/)

@@ -16,6 +16,7 @@ import {
 } from '../providers'
 import { createProfile, type ApiProfile } from '../api-profiles'
 import type { CaptureRegion } from '../../../../shared/capture-region'
+import { isMouseParkingRegion, type MouseParkingRegion } from '../../../../shared/mouse-parking'
 import type { AppMode } from '../../../../shared/api-profile'
 import type { HintMode } from '../../../../shared/conversation'
 import {
@@ -243,7 +244,7 @@ interface Settings {
   assessmentNextPosition: { x: number; y: number } | null
   assessmentSmoothMouse: boolean
   assessmentMouseParkingEnabled: boolean
-  assessmentMouseParkingRegion: CaptureRegion | null
+  assessmentMouseParkingRegions: MouseParkingRegion[]
   /**
    * Whether the user has ever saved an API key. The welcome dialog keys off
    * this rather than the live `apiKey`, so switching to a profile that is still
@@ -405,7 +406,7 @@ const defaultSettings: Settings = {
   assessmentNextPosition: null,
   assessmentSmoothMouse: false,
   assessmentMouseParkingEnabled: false,
-  assessmentMouseParkingRegion: null,
+  assessmentMouseParkingRegions: [],
   hasConfiguredApi: false,
   apiBaseURL: '',
   customBaseURLs: [],
@@ -803,6 +804,15 @@ export const useSettingsStore = create<SettingsStore>()(
       },
       merge: (persisted, current) => {
         const state = { ...current, ...(persisted as Partial<Settings>) }
+        // The old fractional picker rectangle cannot be converted without its display.
+        // Start manual coordinates empty and disabled until the user saves them.
+        if (
+          !Array.isArray(state.assessmentMouseParkingRegions) ||
+          !state.assessmentMouseParkingRegions.every(isMouseParkingRegion)
+        ) {
+          state.assessmentMouseParkingRegions = []
+        }
+        if (!state.assessmentMouseParkingRegions.length) state.assessmentMouseParkingEnabled = false
         state.ocrFilterMargins = normalizeOcrFilterMargins(state.ocrFilterMargins)
         // Rebuild the presets on every load, so ones added in a later version
         // show up for existing users; the ones the user deleted stay out

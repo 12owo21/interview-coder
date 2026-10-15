@@ -1,5 +1,6 @@
 import { app, dialog, ipcMain } from 'electron'
 import type { CaptureRegion } from '../shared/capture-region'
+import type { MouseParkingRegion } from '../shared/mouse-parking'
 import type { ApiProfile, AppMode } from '../shared/api-profile'
 import type { HintMode } from '../shared/conversation'
 import { DEFAULT_OCR_FILTER_MARGINS, normalizeOcrFilterMargins } from '../shared/ocr'
@@ -125,7 +126,7 @@ export const settings = {
   assessmentNextPosition: null as { x: number; y: number } | null,
   assessmentSmoothMouse: false,
   assessmentMouseParkingEnabled: false,
-  assessmentMouseParkingRegion: null as CaptureRegion | null,
+  assessmentMouseParkingRegions: [] as MouseParkingRegion[],
   /** 截图模式's system prompt, from the renderer's active scene */
   customPrompt: '',
   /** 对话模式's system prompt, from the renderer's active scene */

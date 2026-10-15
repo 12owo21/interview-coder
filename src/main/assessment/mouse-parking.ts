@@ -1,28 +1,15 @@
-import type { CaptureRegion } from '../../shared/capture-region'
+import { isMouseParkingRegion, type MouseParkingRegion } from '../../shared/mouse-parking'
 import type { Point } from '../../shared/assessment'
 import type { ScreenshotCapture } from '../take-screenshot'
 
-/** Resolve against this round's full screen, never against the cropped image. */
+/** Choose a region uniformly, then an inset point. Coordinates are already physical pixels. */
 export function randomParkingPoint(
-  region: CaptureRegion | null | undefined,
+  regions: MouseParkingRegion[] | null | undefined,
   capture: ScreenshotCapture,
   random: () => number = Math.random
 ): Point {
-  if (!region) throw new Error('请先在设置 → 做题模式中框选鼠标停放区域')
-  if (region.displayId !== capture.displayId) {
-    throw new Error('鼠标停放区域必须与本轮答题屏幕相同，请重新框选或修改截图屏幕')
-  }
-  const { x, y, width, height } = region
-  if (
-    ![x, y, width, height].every(Number.isFinite) ||
-    x < 0 ||
-    y < 0 ||
-    width <= 0 ||
-    height <= 0 ||
-    x + width > 1 + 1e-9 ||
-    y + height > 1 + 1e-9
-  )
-    throw new Error('鼠标停放区域无效，请重新框选')
+  if (!Array.isArray(regions) || !regions.length)
+    throw new Error('请先在设置 → 做题模式中输入并保存鼠标停放区域')
   if (
     ![capture.physicalWidth, capture.physicalHeight].every(
       (n) => Number.isSafeInteger(n) && n > 0
@@ -30,15 +17,24 @@ export function randomParkingPoint(
     ![capture.originX, capture.originY].every((n) => Number.isSafeInteger(n) && n >= 0)
   )
     throw new Error('当前鼠标停放仅支持非负坐标屏幕，请检查屏幕布局')
-  const sample = (fraction: number, size: number, total: number): number => {
-    const first = Math.ceil(fraction * total)
-    const last = Math.min(total - 1, Math.ceil((fraction + size) * total) - 1)
-    if (last < first) throw new Error('鼠标停放区域过小，请重新框选')
+  for (const [index, region] of regions.entries()) {
+    if (!isMouseParkingRegion(region))
+      throw new Error(`鼠标停放区域 ${index + 1} 无效：请输入非负整数，右下角必须在左上角的右下方`)
+    if (
+      region.left < capture.originX ||
+      region.top < capture.originY ||
+      region.right >= capture.originX + capture.physicalWidth ||
+      region.bottom >= capture.originY + capture.physicalHeight
+    )
+      throw new Error(`鼠标停放区域 ${index + 1} 超出本轮答题屏幕，请检查坐标或截图屏幕`)
+  }
+  const region = regions[Math.floor(random() * regions.length)]
+  const sample = (first: number, last: number): number => {
     const padding = Math.min(8, Math.floor((last - first) / 4))
     return first + padding + Math.floor(random() * (last - first - 2 * padding + 1))
   }
   return {
-    x: capture.originX + sample(x, width, capture.physicalWidth),
-    y: capture.originY + sample(y, height, capture.physicalHeight)
+    x: sample(region.left, region.right),
+    y: sample(region.top, region.bottom)
   }
 }

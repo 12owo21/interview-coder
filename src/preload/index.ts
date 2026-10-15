@@ -306,8 +306,6 @@ const api = {
   getDisplays: () => ipcRenderer.invoke('getDisplays') as Promise<DisplayOption[]>,
   // Cover every screen and let the user drag out the capture region; null if cancelled
   pickCaptureRegion: () => ipcRenderer.invoke('pickCaptureRegion') as Promise<CaptureRegion | null>,
-  pickMouseParkingRegion: () =>
-    ipcRenderer.invoke('assessment:pick-mouse-parking-region') as Promise<CaptureRegion | null>,
   testMouseParking: () => ipcRenderer.invoke('assessment:test-mouse-parking') as Promise<void>,
   // Inside a picker window: its frozen screen, then report it painted, then the result
   getRegionPickerData: () =>

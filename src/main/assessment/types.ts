@@ -1,5 +1,6 @@
 import type { ApiProfile } from '../../shared/api-profile'
 import type { CaptureRegion } from '../../shared/capture-region'
+import type { MouseParkingRegion } from '../../shared/mouse-parking'
 import type { OcrFilterMargins } from '../../shared/ocr'
 import type { AssessmentPhase, AssessmentStrategy, Box, Point } from '../../shared/assessment'
 import type { ScreenshotCapture } from '../take-screenshot'
@@ -21,7 +22,7 @@ export interface AssessmentConfig {
   captureRegion: CaptureRegion | null
   smoothMouse: boolean
   mouseParkingEnabled: boolean
-  mouseParkingRegion: CaptureRegion | null
+  mouseParkingRegions: MouseParkingRegion[]
 }
 
 export interface ParsedAssessment {

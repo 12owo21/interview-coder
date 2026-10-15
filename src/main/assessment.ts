@@ -42,9 +42,7 @@ function readConfig(): AssessmentConfig {
     captureScreen: settings.captureScreen,
     smoothMouse: settings.assessmentSmoothMouse,
     mouseParkingEnabled: settings.assessmentMouseParkingEnabled,
-    mouseParkingRegion: settings.assessmentMouseParkingRegion
-      ? { ...settings.assessmentMouseParkingRegion }
-      : null,
+    mouseParkingRegions: structuredClone(settings.assessmentMouseParkingRegions),
     captureRegion: settings.captureRegion ? { ...settings.captureRegion } : null
   }
 }
@@ -152,7 +150,7 @@ ipcMain.handle('assessment:test-mouse-parking', () =>
     })
     signal.throwIfAborted()
     if (!capture) throw new Error('无法获取答题屏幕')
-    await moveScreenPoint(randomParkingPoint(config.mouseParkingRegion, capture), {
+    await moveScreenPoint(randomParkingPoint(config.mouseParkingRegions, capture), {
       signal,
       smooth: config.smoothMouse
     })
