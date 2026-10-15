@@ -157,7 +157,13 @@ export default function RegionPicker() {
           onPointerDown={(e) => e.stopPropagation()}
           onDoubleClick={(e) => e.stopPropagation()}
         >
-          <span>{size ? `${size.width} × ${size.height}` : '拖动鼠标框选截图区域'}</span>
+          <span>
+            {size
+              ? `${size.width} × ${size.height}`
+              : data?.purpose === 'parking'
+                ? '拖动鼠标框选停放区域（选择答题屏幕上的空白处）'
+                : '拖动鼠标框选截图区域'}
+          </span>
           <span className="text-xs text-neutral-400">
             {size ? '可重新拖动；Enter 或双击确认，Esc 取消' : 'Esc 取消'}
           </span>

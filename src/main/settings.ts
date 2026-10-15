@@ -123,6 +123,9 @@ export const settings = {
     D: null as { x: number; y: number } | null
   } as Record<string, { x: number; y: number } | null>,
   assessmentNextPosition: null as { x: number; y: number } | null,
+  assessmentSmoothMouse: false,
+  assessmentMouseParkingEnabled: false,
+  assessmentMouseParkingRegion: null as CaptureRegion | null,
   /** 截图模式's system prompt, from the renderer's active scene */
   customPrompt: '',
   /** 对话模式's system prompt, from the renderer's active scene */

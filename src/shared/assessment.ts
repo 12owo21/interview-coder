@@ -12,6 +12,7 @@ export type AssessmentPhase =
   | 'validating'
   | 'locating'
   | 'clicking'
+  | 'parking'
   | 'waiting'
   | 'refreshing'
   | 'stopping'
@@ -94,6 +95,7 @@ export const ASSESSMENT_PHASE_LABELS: Record<AssessmentPhase, string> = {
   validating: '校验答案',
   locating: '解析点击位置',
   clicking: '执行点击',
+  parking: '停放鼠标',
   waiting: '等待下一题',
   refreshing: '等待重新截屏识别',
   stopping: '正在停止，等待当前操作结束',

@@ -241,6 +241,9 @@ interface Settings {
   assessmentFixedClick: boolean
   assessmentFixedPositions: Record<string, { x: number; y: number } | null>
   assessmentNextPosition: { x: number; y: number } | null
+  assessmentSmoothMouse: boolean
+  assessmentMouseParkingEnabled: boolean
+  assessmentMouseParkingRegion: CaptureRegion | null
   /**
    * Whether the user has ever saved an API key. The welcome dialog keys off
    * this rather than the live `apiKey`, so switching to a profile that is still
@@ -400,6 +403,9 @@ const defaultSettings: Settings = {
   assessmentFixedClick: false,
   assessmentFixedPositions: { A: null, B: null, C: null, D: null },
   assessmentNextPosition: null,
+  assessmentSmoothMouse: false,
+  assessmentMouseParkingEnabled: false,
+  assessmentMouseParkingRegion: null,
   hasConfiguredApi: false,
   apiBaseURL: '',
   customBaseURLs: [],

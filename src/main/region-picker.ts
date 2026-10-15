@@ -6,6 +6,7 @@ import { findScreenSource, settingsResolution } from './take-screenshot'
 
 /** What a picker window draws on: its screen, frozen, and the region already set there */
 export interface RegionPickerData {
+  purpose: 'capture' | 'parking'
   /** JPEG data URL of the screen as it was when picking started */
   image: string
   /** The saved region, when it is on this screen */
@@ -30,6 +31,7 @@ const PICKER_TIMEOUT = 5 * 60 * 1000
 let active = false
 let pickers: Picker[] = []
 let savedRegion: CaptureRegion | null = null
+let pickerPurpose: RegionPickerData['purpose'] = 'capture'
 let settle: ((region: CaptureRegion | null) => void) | null = null
 let timeout: NodeJS.Timeout | null = null
 
@@ -40,10 +42,14 @@ let timeout: NodeJS.Timeout | null = null
  * by content protection). Resolves with the new region, or null if cancelled.
  */
 export async function pickCaptureRegion(
-  current: CaptureRegion | null
+  current: CaptureRegion | null,
+  purpose: RegionPickerData['purpose'] = 'capture',
+  signal?: AbortSignal
 ): Promise<CaptureRegion | null> {
+  signal?.throwIfAborted()
   if (active) return null
   active = true
+  pickerPurpose = purpose
 
   const displays = screen.getAllDisplays()
   // Sized for the densest screen, so no background is blurrier than the screen under it
@@ -59,7 +65,8 @@ export async function pickCaptureRegion(
     throw error
   }
 
-  return new Promise((resolve) => {
+  const cancel = (): void => finish(null)
+  return new Promise<CaptureRegion | null>((resolve) => {
     settle = resolve
     savedRegion = current
     pickers = displays.flatMap((display) => {
@@ -73,7 +80,9 @@ export async function pickCaptureRegion(
       return
     }
     timeout = setTimeout(() => finish(null), PICKER_TIMEOUT)
-  })
+    signal?.addEventListener('abort', cancel, { once: true })
+    if (signal?.aborted) cancel()
+  }).finally(() => signal?.removeEventListener('abort', cancel))
 }
 
 function createPickerWindow(display: Display): BrowserWindow {
@@ -152,6 +161,7 @@ ipcMain.handle('getRegionPickerData', (event): RegionPickerData | null => {
   const displayId = String(picker.display.id)
   return {
     image: picker.image,
+    purpose: pickerPurpose,
     region: savedRegion?.displayId === displayId ? savedRegion : null,
     ...settingsResolution(picker.display)
   }

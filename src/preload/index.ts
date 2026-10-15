@@ -87,9 +87,11 @@ const api = {
   analyzeAssessment: () => ipcRenderer.invoke('assessment:analyze') as Promise<boolean>,
   stopAssessment: () => ipcRenderer.invoke('assessment:stop') as Promise<void>,
   resetAssessmentMemory: () => ipcRenderer.invoke('assessment:reset-memory') as Promise<void>,
-  getAssessmentSnapshot: () => ipcRenderer.invoke('assessment:get-snapshot') as Promise<AssessmentSnapshot>,
+  getAssessmentSnapshot: () =>
+    ipcRenderer.invoke('assessment:get-snapshot') as Promise<AssessmentSnapshot>,
   onAssessmentSnapshot: (callback: (snapshot: AssessmentSnapshot) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, snapshot: AssessmentSnapshot): void => callback(snapshot)
+    const listener = (_event: Electron.IpcRendererEvent, snapshot: AssessmentSnapshot): void =>
+      callback(snapshot)
     ipcRenderer.on('assessment-snapshot', listener)
     return () => ipcRenderer.removeListener('assessment-snapshot', listener)
   },
@@ -105,18 +107,24 @@ const api = {
     ipcRenderer.on('assessment-error', (_event, message: string) => callback(message))
   },
   removeAssessmentErrorListener: () => ipcRenderer.removeAllListeners('assessment-error'),
-  onAssessmentClicked: (callback: (data: { answers: string[]; x: number; y: number; nextClicked?: boolean }) => void) => {
+  onAssessmentClicked: (
+    callback: (data: { answers: string[]; x: number; y: number; nextClicked?: boolean }) => void
+  ) => {
     ipcRenderer.on('assessment-clicked', (_event, data) => callback(data))
   },
   removeAssessmentClickedListener: () => ipcRenderer.removeAllListeners('assessment-clicked'),
-  onAssessmentLoadingStart: (callback: () => void) => ipcRenderer.on('assessment-loading-start', callback),
-  onAssessmentLoadingEnd: (callback: () => void) => ipcRenderer.on('assessment-loading-end', callback),
+  onAssessmentLoadingStart: (callback: () => void) =>
+    ipcRenderer.on('assessment-loading-start', callback),
+  onAssessmentLoadingEnd: (callback: () => void) =>
+    ipcRenderer.on('assessment-loading-end', callback),
   removeAssessmentLoadingListeners: () => {
     ipcRenderer.removeAllListeners('assessment-loading-start')
     ipcRenderer.removeAllListeners('assessment-loading-end')
   },
-  onAssessmentLoopStarted: (callback: () => void) => ipcRenderer.on('assessment-loop-started', callback),
-  onAssessmentLoopStopped: (callback: () => void) => ipcRenderer.on('assessment-loop-stopped', callback),
+  onAssessmentLoopStarted: (callback: () => void) =>
+    ipcRenderer.on('assessment-loop-started', callback),
+  onAssessmentLoopStopped: (callback: () => void) =>
+    ipcRenderer.on('assessment-loop-stopped', callback),
   removeAssessmentLoopListeners: () => {
     ipcRenderer.removeAllListeners('assessment-loop-started')
     ipcRenderer.removeAllListeners('assessment-loop-stopped')
@@ -298,6 +306,9 @@ const api = {
   getDisplays: () => ipcRenderer.invoke('getDisplays') as Promise<DisplayOption[]>,
   // Cover every screen and let the user drag out the capture region; null if cancelled
   pickCaptureRegion: () => ipcRenderer.invoke('pickCaptureRegion') as Promise<CaptureRegion | null>,
+  pickMouseParkingRegion: () =>
+    ipcRenderer.invoke('assessment:pick-mouse-parking-region') as Promise<CaptureRegion | null>,
+  testMouseParking: () => ipcRenderer.invoke('assessment:test-mouse-parking') as Promise<void>,
   // Inside a picker window: its frozen screen, then report it painted, then the result
   getRegionPickerData: () =>
     ipcRenderer.invoke('getRegionPickerData') as Promise<RegionPickerData | null>,

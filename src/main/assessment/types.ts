@@ -19,6 +19,9 @@ export interface AssessmentConfig {
   personality: string
   captureScreen: string
   captureRegion: CaptureRegion | null
+  smoothMouse: boolean
+  mouseParkingEnabled: boolean
+  mouseParkingRegion: CaptureRegion | null
 }
 
 export interface ParsedAssessment {

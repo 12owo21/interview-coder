@@ -14,6 +14,7 @@ import {
 import { useSettingsStore } from '@/lib/store/settings'
 import { Field, SettingsCard } from '../components'
 import { LocalOcrPanel } from '../LocalOcrPanel'
+import { AssessmentMouseSettings } from '../AssessmentMouseSettings'
 
 export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: string) => void }) {
   const {
@@ -86,6 +87,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
         </Select>
       </Field>
       <div className="mt-5 space-y-3 border-t border-gray-400/40 pt-4">
+        <AssessmentMouseSettings />
         <Field
           label="OCR 定位选项"
           note={

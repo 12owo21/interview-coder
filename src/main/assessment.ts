@@ -9,12 +9,13 @@ import { takeScreenshotWithMetadata } from './take-screenshot'
 import { recognizeLocalPng } from './ocr'
 import { getAssessmentStream } from './ai'
 import { consumeStream, extractErrorMessage } from './stream'
-import { clickScreenPoint } from './click'
+import { clickScreenPoint, moveScreenPoint } from './click'
 import { assessmentMemory, assessmentScoreMemory } from './assessment-memory'
 import { AssessmentController } from './assessment/controller'
 import { AssessmentRunner } from './assessment/runner'
 import { AssessmentClickExecutor } from './assessment/click-executor'
 import { AssessmentPageGuard } from './assessment/page-guard'
+import { randomParkingPoint } from './assessment/mouse-parking'
 import type { AssessmentConfig } from './assessment/types'
 import type { AssessmentSnapshot } from '../shared/assessment'
 
@@ -39,6 +40,11 @@ function readConfig(): AssessmentConfig {
     personality:
       settings.assessmentPersonalityPrompt.trim() || DEFAULT_ASSESSMENT_PERSONALITY_PROMPT,
     captureScreen: settings.captureScreen,
+    smoothMouse: settings.assessmentSmoothMouse,
+    mouseParkingEnabled: settings.assessmentMouseParkingEnabled,
+    mouseParkingRegion: settings.assessmentMouseParkingRegion
+      ? { ...settings.assessmentMouseParkingRegion }
+      : null,
     captureRegion: settings.captureRegion ? { ...settings.captureRegion } : null
   }
 }
@@ -69,7 +75,7 @@ const runner = new AssessmentRunner({
   ocr: recognizeLocalPng,
   memory: assessmentMemory,
   scoreMemory: assessmentScoreMemory,
-  executor: new AssessmentClickExecutor(clickScreenPoint),
+  executor: new AssessmentClickExecutor(clickScreenPoint, undefined, moveScreenPoint),
   guard: new AssessmentPageGuard(takeScreenshotWithMetadata),
   assertClickSupported: () => {
     if (process.platform !== 'win32') throw new Error('自动点击目前仅支持 Windows；可使用 OCR 预览')
@@ -131,6 +137,24 @@ ipcMain.handle('assessment:reset-memory', () => {
   assessmentScoreMemory.reset()
 })
 ipcMain.handle('click-screen-point', (_event, point: { x: number; y: number }) =>
-  assessmentController.runManual(() => clickScreenPoint(point))
+  assessmentController.runManual((signal) =>
+    clickScreenPoint(point, { signal, smooth: settings.assessmentSmoothMouse })
+  )
 )
 app.on('before-quit', stopAssessmentLoop)
+
+ipcMain.handle('assessment:test-mouse-parking', () =>
+  assessmentController.runManual(async (signal) => {
+    const config = readConfig()
+    const capture = await takeScreenshotWithMetadata({
+      captureScreen: config.captureScreen,
+      captureRegion: config.captureRegion
+    })
+    signal.throwIfAborted()
+    if (!capture) throw new Error('无法获取答题屏幕')
+    await moveScreenPoint(randomParkingPoint(config.mouseParkingRegion, capture), {
+      signal,
+      smooth: config.smoothMouse
+    })
+  })
+)

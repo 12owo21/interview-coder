@@ -84,7 +84,10 @@ export async function runAssessmentSelfTest(reportPath: string): Promise<void> {
       fixedPositions: {},
       nextPosition: null,
       captureScreen: 'cursor',
-      captureRegion: null
+      captureRegion: null,
+      smoothMouse: false,
+      mouseParkingEnabled: false,
+      mouseParkingRegion: null
     }
     let changePage = false
     let changeButton = false

@@ -125,12 +125,12 @@ export class AssessmentController {
     return completed
   }
 
-  async runManual(action: () => Promise<void>): Promise<void> {
+  async runManual(action: (signal: AbortSignal) => Promise<void>): Promise<void> {
     if (this.abort) throw new Error('请先停止自动做题，再手动点击')
     this.abort = new AbortController()
     this.update({ busy: true, phase: 'clicking', error: null })
     try {
-      await action()
+      await action(this.abort.signal)
     } finally {
       this.abort = null
       this.update({ busy: false, phase: 'idle' })

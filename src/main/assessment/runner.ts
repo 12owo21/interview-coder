@@ -25,6 +25,7 @@ import { AssessmentScoreMemoryService } from './score-memory-service'
 import { AssessmentScoreDecision } from './score-decision'
 import { configureAssessmentSessions } from './memory-sessions'
 import { validateScoreRecovery } from './score-recovery'
+import { randomParkingPoint } from './mouse-parking'
 
 export interface RunnerDependencies {
   capture: CaptureFunction
@@ -282,6 +283,10 @@ export class AssessmentRunner {
     if (preview) return { preview: true, pageKey }
     deps.assertClickSupported()
     checkAborted(signal)
+    // Validate parking before any click. It must not redirect the next cursor-based capture.
+    const parkingPoint = config.mouseParkingEnabled
+      ? randomParkingPoint(config.mouseParkingRegion, capture)
+      : undefined
     const anchors =
       layout?.regions.filter((r) => parsed.questionRegionIds?.includes(r.id)).map((r) => r.box) ??
       []
@@ -304,7 +309,8 @@ export class AssessmentRunner {
           result.executedSteps = count
           result.execution = 'partial'
           update({ result: { ...result } })
-        }
+        },
+        config.smoothMouse
       )
       checkAborted(signal)
       if (!config.mostLeastEnabled && !retry.memoryCommitted) {
@@ -328,6 +334,19 @@ export class AssessmentRunner {
           `${context.recovery && parsed.selectedAnswers?.length ? `已跳过当前确认选中的 ${parsed.selectedAnswers.join(' → ')}；` : ''}本轮完成 ${plan.length} 次点击${result.next ? '，包含下一步' : ''}；尚未验证点击后的网页状态`
         ].join('；')
       })
+      if (parkingPoint && plan.length) {
+        phase('parking')
+        try {
+          await deps.executor.park(parkingPoint, signal, config.smoothMouse)
+        } catch (error) {
+          checkAborted(signal)
+          // Clicks and memory are already committed. A parking failure must not
+          // enter page-recovery retries and replay the completed answer.
+          throw new Error(
+            `本轮点击已完成，但鼠标停放失败：${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+      }
     } catch (error) {
       if (error instanceof AssessmentPageChangedError) {
         error.recovery = {

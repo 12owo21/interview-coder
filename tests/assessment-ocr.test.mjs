@@ -452,6 +452,8 @@ function harness(options = {}) {
   const { ocr, response } = fixture()
   const cfg = { ...config(), ...options.config }
   const clicks = [],
+    parked = [],
+    mouseOptions = [],
     delays = [],
     prompts = []
   const memory = new AssessmentMemoryService()
@@ -474,12 +476,17 @@ function harness(options = {}) {
       return raw
     },
     executor: new AssessmentClickExecutor(
-      async (p) => {
+      async (p, movement) => {
         clicks.push(p)
+        mouseOptions.push(movement)
         await options.onClick?.(clicks.length)
       },
       async (ms) => {
         delays.push(ms)
+      },
+      async (point, movement) => {
+        parked.push({ point, movement, clicks: clicks.length })
+        await options.onPark?.()
       }
     ),
     guard: {
@@ -500,6 +507,8 @@ function harness(options = {}) {
     runner,
     memory,
     clicks,
+    parked,
+    mouseOptions,
     delays,
     prompts,
     get guards() {
@@ -525,6 +534,75 @@ function harness(options = {}) {
       )
   }
 }
+
+const parkingRegion = { displayId: '1', x: 0.8, y: 0.1, width: 0.1, height: 0.2 }
+
+test('parking runs once after all answer and next clicks, forwarding movement setting', async () => {
+  const h = harness({
+    config: { mouseParkingEnabled: true, mouseParkingRegion: parkingRegion, smoothMouse: true }
+  })
+  const signal = new AbortController().signal
+  await h.run(signal)
+  assert.equal(h.parked.length, 1)
+  const { point, movement, clicks } = h.parked[0]
+  assert.equal(clicks, 3)
+  assert.equal(h.last.result.executedSteps, 3)
+  assert.equal(h.last.result.execution, 'executed')
+  assert.ok(point.x >= 1600 && point.x < 1800 && point.y >= 200 && point.y < 600)
+  assert.deepEqual(movement, { signal, smooth: true })
+  assert.ok(h.mouseOptions.every((item) => item.signal === signal && item.smooth === true))
+})
+
+test('parking disabled and preview never move; preview does not require parking configuration', async () => {
+  for (const config of [{}, { mouseParkingEnabled: true, preview: true }]) {
+    const h = harness({ config })
+    await h.run()
+    assert.equal(h.parked.length, 0)
+    if (config.preview) assert.equal(h.clicks.length, 0)
+  }
+})
+
+test('invalid parking configuration stops before any click or answer-memory commit', async () => {
+  for (const region of [
+    null,
+    { ...parkingRegion, displayId: 'disconnected' },
+    { ...parkingRegion, width: NaN }
+  ]) {
+    const h = harness({ config: { mouseParkingEnabled: true, mouseParkingRegion: region } })
+    await assert.rejects(h.run(), /停放区域/)
+    assert.equal(h.clicks.length, 0)
+    assert.equal(h.parked.length, 0)
+    assert.equal(h.memory.snapshot().context, '')
+  }
+})
+
+test('parking failure preserves completed clicks and memory without page-recovery retry', async () => {
+  const h = harness({
+    config: { mouseParkingEnabled: true, mouseParkingRegion: parkingRegion },
+    onPark: () => {
+      throw new AssessmentPageChangedError('test parking failure')
+    }
+  })
+  await assert.rejects(h.run(), (error) => {
+    assert.ok(!(error instanceof AssessmentPageChangedError))
+    return /点击已完成.*停放失败/.test(error.message)
+  })
+  assert.equal(h.clicks.length, 3)
+  assert.equal(h.last.result.execution, 'executed')
+  assert.ok(h.memory.snapshot().context)
+})
+
+test('cancellation after a click prevents subsequent clicks and parking', async () => {
+  const controller = new AbortController()
+  const h = harness({
+    config: { mouseParkingEnabled: true, mouseParkingRegion: parkingRegion },
+    onClick: () => controller.abort()
+  })
+  await assert.rejects(h.run(controller.signal), /停止/)
+  assert.equal(h.last.result.executedSteps, 1)
+  assert.equal(h.clicks.length, 1)
+  assert.equal(h.parked.length, 0)
+})
 
 test('OCR pipeline clicks ordered first-line centers then next, uses one image and scoped profile', async () => {
   const h = harness()
