@@ -116,6 +116,7 @@ export class AssessmentRunner {
       context.recovery
     )
     const aiStart = Date.now()
+    let requestAttempt = 0
     const { output, value } = await this.validatedRequest.run({
       messages: prompt.messages,
       signal,
@@ -123,19 +124,36 @@ export class AssessmentRunner {
         phase('analyzing')
         let raw = ''
         let oversized = false
-        update({ raw })
+        update({
+          raw,
+          rawInput: {
+            requestId: randomUUID(),
+            attempt: ++requestAttempt,
+            system: prompt.system,
+            messages: structuredClone(messages)
+          }
+        })
         try {
-          return await deps.ask(messages, prompt.system, config.profile, signal, (chunk) => {
-            checkAborted(signal)
-            raw += chunk
-            if (raw.length > 131072) {
-              oversized = true
-              throw new ModelResultValidationError(
-                'AI 输出超过 128K 字符限制，请精简并返回完整 JSON'
-              )
+          const output = await deps.ask(
+            messages,
+            prompt.system,
+            config.profile,
+            signal,
+            (chunk) => {
+              checkAborted(signal)
+              raw += chunk
+              if (raw.length > 131072) {
+                oversized = true
+                throw new ModelResultValidationError(
+                  'AI 输出超过 128K 字符限制，请精简并返回完整 JSON'
+                )
+              }
+              update({ raw })
             }
-            update({ raw })
-          })
+          )
+          // Keep the final output even for adapters that return without streaming chunks.
+          update({ raw: output })
+          return output
         } catch (error) {
           // Stream adapters may wrap callback errors; keep the original validation category.
           if (oversized)

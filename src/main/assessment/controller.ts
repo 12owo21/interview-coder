@@ -14,6 +14,7 @@ export class AssessmentController {
     looping: false,
     phase: 'idle',
     raw: '',
+    rawInput: null,
     error: null,
     notice: '',
     result: null,
@@ -28,7 +29,7 @@ export class AssessmentController {
   ) {}
 
   getSnapshot(): AssessmentSnapshot {
-    return structuredClone(this.state)
+    return structuredClone({ ...this.state, rawInputId: this.state.rawInput?.requestId ?? null })
   }
 
   private update(patch: Partial<AssessmentSnapshot>): void {
@@ -67,7 +68,7 @@ export class AssessmentController {
         checkAborted(controller.signal)
         const id = randomUUID()
         const config = structuredClone(this.config())
-        this.update({ runId: id, result: null, debug: null, raw: '' })
+        this.update({ runId: id, result: null, debug: null, raw: '', rawInput: null })
         retry.beginAttempt()
         let outcome: { preview: boolean; pageKey: string }
         try {

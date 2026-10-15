@@ -50,6 +50,7 @@ function readConfig(): AssessmentConfig {
 let pendingSnapshot: AssessmentSnapshot | undefined
 let publishTimer: ReturnType<typeof setTimeout> | undefined
 let lastImageCaptureId: string | undefined
+let lastRawInputId: string | undefined
 function publish(snapshot: AssessmentSnapshot): void {
   pendingSnapshot = snapshot
   if (publishTimer) return
@@ -63,6 +64,15 @@ function publish(snapshot: AssessmentSnapshot): void {
       const captureId = state.debug.captureId
       if (captureId === lastImageCaptureId) state.debug = { ...state.debug, image: undefined }
       lastImageCaptureId = captureId
+    }
+    // Prompts can include long histories and screenshot data. Send once per
+    // request, while get-snapshot always returns the complete current input.
+    if (state.rawInput) {
+      const requestId = state.rawInput.requestId
+      if (requestId === lastRawInputId) state.rawInput = undefined
+      lastRawInputId = requestId
+    } else if (state.rawInput === null) {
+      lastRawInputId = undefined
     }
     window.webContents.send('assessment-snapshot', state)
   }, 50)

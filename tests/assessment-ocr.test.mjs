@@ -455,7 +455,8 @@ function harness(options = {}) {
     parked = [],
     mouseOptions = [],
     delays = [],
-    prompts = []
+    prompts = [],
+    inputsAtRequest = []
   const memory = new AssessmentMemoryService()
   let guards = 0
   let last = {}
@@ -467,6 +468,7 @@ function harness(options = {}) {
     },
     memory,
     ask: async (messages, system, profile, signal, chunk) => {
+      inputsAtRequest.push(structuredClone(last.rawInput))
       prompts.push({ messages, system, profile })
       const data = currentPromptData(messages)
       response.captureId = data.captureId
@@ -511,6 +513,7 @@ function harness(options = {}) {
     mouseOptions,
     delays,
     prompts,
+    inputsAtRequest,
     get guards() {
       return guards
     },
@@ -536,6 +539,51 @@ function harness(options = {}) {
 }
 
 const parkingRegion = { id: 'one', left: 1600, top: 200, right: 1799, bottom: 599 }
+
+test('raw input is captured before the request, including complete system, history, OCR and image', async () => {
+  const h = harness()
+  await h.run()
+  const input = h.inputsAtRequest[0]
+  assert.equal(input.attempt, 1)
+  assert.equal(input.system, h.prompts[0].system)
+  assert.deepEqual(input.messages, h.prompts[0].messages)
+  assert.match(input.messages[0].content[0].text, /assessmentHistory/)
+  assert.ok(currentPromptData(input.messages).ocr.regions.length)
+  assert.equal(input.messages[0].content.at(-1).image, capture.data)
+  assert.equal(input.profile, undefined)
+  assert.equal(input.apiKey, undefined)
+})
+
+test('raw input updates to the exact correction request and output keeps non-streamed responses', async () => {
+  let calls = 0
+  const h = harness({ ask: async (response) => (++calls === 1 ? '{' : JSON.stringify(response)) })
+  await h.run()
+  assert.equal(calls, 2)
+  const [first, second] = h.inputsAtRequest
+  assert.notEqual(first.requestId, second.requestId)
+  assert.equal(second.attempt, 2)
+  assert.equal(second.system, h.prompts[1].system)
+  assert.deepEqual(second.messages, h.prompts[1].messages)
+  assert.match(second.messages.at(-1).content, /validationError/)
+  assert.equal(first.messages.length, 1)
+  assert.equal(h.last.rawInput.requestId, second.requestId)
+  assert.equal(h.last.raw, h.last.result.raw)
+})
+
+test('new capture clears previous raw input even if the next request cannot start', async () => {
+  const h = harness()
+  const controller = new AssessmentController(
+    h.runner,
+    () => h.cfg,
+    () => {}
+  )
+  assert.equal(await controller.runOnce(), true)
+  assert.ok(controller.getSnapshot().rawInput)
+  h.cfg.profile.apiKey = ''
+  assert.equal(await controller.runOnce(), false)
+  assert.equal(controller.getSnapshot().rawInput, null)
+  assert.equal(controller.getSnapshot().raw, '')
+})
 
 test('parking runs once after all answer and next clicks, forwarding movement setting', async () => {
   const h = harness({

@@ -1,5 +1,6 @@
 import type { OcrResult } from './ocr'
 import type { AssessmentScoringResult } from './assessment-scoring'
+import type { ModelMessage } from 'ai'
 
 export type Point = { x: number; y: number }
 export type Box = { left: number; top: number; right: number; bottom: number }
@@ -74,6 +75,13 @@ export interface AssessmentDebug {
   points?: Array<{ label: string; point: Point }>
 }
 
+export interface AssessmentRawInput {
+  requestId: string
+  attempt: number
+  system: string
+  messages: ModelMessage[]
+}
+
 export interface AssessmentSnapshot {
   revision: number
   runId?: string
@@ -81,6 +89,9 @@ export interface AssessmentSnapshot {
   looping: boolean
   phase: AssessmentPhase
   raw: string
+  /** Undefined in incremental events means unchanged; null clears the previous request. */
+  rawInput?: AssessmentRawInput | null
+  rawInputId?: string | null
   error: string | null
   notice: string
   result: AssessmentResult | null
