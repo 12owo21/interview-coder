@@ -19,7 +19,7 @@ import {
   Zap,
   type LucideIcon
 } from 'lucide-react'
-import type { AppMode } from './store/settings'
+import type { ModeId } from '../../../shared/app-modes'
 
 /** Action names the main process accepts from a toolbar click */
 export type ToolbarActionName = Parameters<Window['api']['triggerAction']>[0]
@@ -51,7 +51,7 @@ const COMMON_ACTIONS: ToolbarAction[] = [
  * hides the toolbar, leaving no way to click the window back. So is 清空对话:
  * a hover-triggered button must not be able to wipe the conversation.
  */
-export const TOOLBAR_ACTIONS: Record<AppMode | 'assessment', ToolbarAction[]> = {
+export const TOOLBAR_ACTIONS: Record<ModeId, ToolbarAction[]> = {
   assessment: COMMON_ACTIONS,
   screenshot: [
     { action: 'takeScreenshot', Icon: Camera, label: '截图解题（新开对话）' },
@@ -70,6 +70,6 @@ export const TOOLBAR_ACTIONS: Record<AppMode | 'assessment', ToolbarAction[]> = 
     { action: 'toggleTranscription', Icon: Mic, label: '开始/停止监听对方说话' },
     ...COMMON_ACTIONS,
     { action: 'cycleScene', Icon: Layers, label: '切换到下一个提示词场景' },
-    { action: 'switchMode', Icon: ArrowLeftRight, label: '切换到截图模式' }
+    { action: 'switchMode', Icon: ArrowLeftRight, label: '切换到做题模式' }
   ]
 }

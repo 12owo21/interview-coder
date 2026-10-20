@@ -1,7 +1,8 @@
 import { app, dialog, ipcMain } from 'electron'
 import type { CaptureRegion } from '../shared/capture-region'
 import type { MouseParkingRegion } from '../shared/mouse-parking'
-import type { ApiProfile, AppMode } from '../shared/api-profile'
+import type { ApiProfile } from '../shared/api-profile'
+import { getModeDefinition, type ModeId } from '../shared/app-modes'
 import type { HintMode } from '../shared/conversation'
 import { DEFAULT_OCR_FILTER_MARGINS, normalizeOcrFilterMargins } from '../shared/ocr'
 import { setToolbarOpacity, syncToolbarSettings } from './toolbar-window'
@@ -172,8 +173,8 @@ export type AppSettings = typeof settings
  * The profile a mode sends its requests with. Until the renderer has synced
  * its list (or with only `.env` configured) the flat fields are all there is.
  */
-export function getModeProfile(mode: AppMode): ApiProfile {
-  const id = mode === 'screenshot' ? settings.screenshotProfileId : settings.conversationProfileId
+export function getModeProfile(mode: ModeId): ApiProfile {
+  const id = settings[getModeDefinition(mode).profileKey]
   const profile = settings.apiProfiles.find((p) => p.id === id)
   if (profile) return profile
   return {
@@ -187,17 +188,7 @@ export function getModeProfile(mode: AppMode): ApiProfile {
   }
 }
 
-/** The profile used by the experimental 做题 mode. */
+/** Compatibility entry point for assessment callers. */
 export function getAssessmentProfile(): ApiProfile {
-  const profile = settings.apiProfiles.find((p) => p.id === settings.assessmentProfileId)
-  if (profile) return profile
-  return {
-    id: '',
-    name: '',
-    apiBaseURL: settings.apiBaseURL,
-    apiKey: settings.apiKey,
-    apiHeaders: settings.apiHeaders,
-    model: settings.model,
-    disableThinking: settings.disableThinking
-  }
+  return getModeProfile('assessment')
 }

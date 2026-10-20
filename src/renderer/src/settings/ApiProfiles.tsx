@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { useSettingsStore } from '@/lib/store/settings'
+import { APP_MODES, fallbackModeProfile, supportsMode } from '../../../shared/app-modes'
 
 /** Shown for a profile whose name was cleared, until the field loses focus */
 const UNNAMED = '未命名配置'
@@ -25,15 +26,9 @@ const UNNAMED = '未命名配置'
  * chips carry a tag for each mode using them.
  */
 export function ApiProfiles({ children }: { children: ReactNode }) {
-  const {
-    apiProfiles,
-    activeProfileId,
-    screenshotProfileId,
-    conversationProfileId,
-    setActiveProfile,
-    addProfile,
-    removeProfile
-  } = useSettingsStore()
+  const { apiProfiles, activeProfileId, setActiveProfile, addProfile, removeProfile } =
+    useSettingsStore()
+  const settings = useSettingsStore()
   const [addOpen, setAddOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [copyActive, setCopyActive] = useState(false)
@@ -46,10 +41,17 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
   const successor = apiProfiles.filter((p) => p.id !== activeProfileId)[
     Math.min(activeIndex, apiProfiles.length - 2)
   ]
-  const usedBy = [
-    screenshotProfileId === activeProfileId && '截图模式',
-    conversationProfileId === activeProfileId && '对话模式'
-  ].filter(Boolean)
+  const usedBy = APP_MODES.filter((mode) => settings[mode.profileKey] === activeProfileId)
+  const remainingProfiles = apiProfiles.filter((p) => p.id !== activeProfileId)
+  const deletionNotice = successor
+    ? usedBy
+        .map((mode) => {
+          const fallback = fallbackModeProfile(mode.id, remainingProfiles, successor.id)!
+          const warning = supportsMode(fallback, mode.id) ? '' : '（不支持识图，请另行配置）'
+          return `${mode.label}将改用「${fallback.name.trim() || UNNAMED}」${warning}`
+        })
+        .join('；')
+    : ''
 
   const handleAdd = () => {
     const trimmed = newName.trim()
@@ -66,7 +68,7 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
           <button
             key={profile.id}
             className={cn(
-              'max-w-48 truncate rounded-full border px-3 py-1 text-sm transition-colors cursor-pointer select-none',
+              'max-w-full flex flex-wrap items-center rounded-full border px-3 py-1 text-sm transition-colors cursor-pointer select-none',
               profile.id === activeProfileId
                 ? 'bg-blue-600 border-blue-600 text-white'
                 : 'bg-white border-gray-300 hover:border-blue-400'
@@ -74,8 +76,9 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
             onClick={() => setActiveProfile(profile.id)}
           >
             {profile.name.trim() || UNNAMED}
-            {profile.id === screenshotProfileId && <ModeTag>截图</ModeTag>}
-            {profile.id === conversationProfileId && <ModeTag>对话</ModeTag>}
+            {APP_MODES.filter((mode) => settings[mode.profileKey] === profile.id).map((mode) => (
+              <ModeTag key={mode.id}>{mode.shortLabel}</ModeTag>
+            ))}
           </button>
         ))}
         <button
@@ -113,7 +116,7 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
             <DialogTitle>新增配置</DialogTitle>
             <DialogDescription>
               每个配置单独保存 API
-              地址、密钥、请求头、模型和思考开关；截图模式和对话模式各选一个来用，也可用快捷键切换
+              地址、密钥、请求头、模型和思考开关；每种模式可独立选用，也可共用同一个配置
             </DialogDescription>
           </DialogHeader>
           <Input
@@ -150,9 +153,7 @@ export function ApiProfiles({ children }: { children: ReactNode }) {
             <DialogTitle>删除配置</DialogTitle>
             <DialogDescription>
               确定删除配置「{activeName}」吗？其中的 API Key 等设置将一并删除，且无法恢复。
-              {usedBy.length > 0 &&
-                successor &&
-                `${usedBy.join('和')}正在使用它，删除后改用「${successor.name.trim() || UNNAMED}」。`}
+              {deletionNotice && `${deletionNotice}。`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -181,37 +182,30 @@ function ModeTag({ children }: { children: ReactNode }) {
 
 /** Which modes send their requests with the profile being edited */
 function ProfileUsageField() {
-  const { activeProfileId, screenshotProfileId, conversationProfileId, setModeProfile } =
-    useSettingsStore()
-  const profile = useSettingsStore((s) => s.apiProfiles.find((p) => p.id === activeProfileId))
+  const settings = useSettingsStore()
+  const { activeProfileId, setModeProfile, apiProfiles } = settings
+  const profile = apiProfiles.find((p) => p.id === activeProfileId)
   if (!profile) return null
 
-  const modes = [
-    { mode: 'screenshot' as const, label: '截图模式', inUse: screenshotProfileId === profile.id },
-    {
-      mode: 'conversation' as const,
-      label: '对话模式',
-      inUse: conversationProfileId === profile.id
-    }
-  ]
   // A mode always has a profile, so the one in use is switched off by picking another
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-4">
       <label className="text-sm font-medium">
         用于
         <span className="ml-2 text-xs font-light">
-          点击让该模式改用这个配置；截图模式需要能识图的模型，对话模式适合关闭思考的快模型
+          点击分配配置；做题和截图需要识图模型，对话模式可用纯文本模型
         </span>
       </label>
-      <div className="flex w-60 shrink-0 gap-2">
-        {modes.map(({ mode, label, inUse }) => {
-          const noImages = mode === 'screenshot' && profile.vision === false
+      <div className="flex flex-wrap gap-2">
+        {APP_MODES.map(({ id: mode, label, profileKey }) => {
+          const inUse = settings[profileKey] === profile.id
+          const noImages = !supportsMode(profile, mode)
           return (
             <button
               key={mode}
               disabled={inUse || noImages}
               className={cn(
-                'flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors',
+                'rounded-md border px-2 py-1.5 text-xs transition-colors',
                 inUse
                   ? 'bg-blue-600 border-blue-600 text-white'
                   : noImages
@@ -220,7 +214,7 @@ function ProfileUsageField() {
               )}
               onClick={() => setModeProfile(mode, profile.id)}
             >
-              {inUse ? `${label}使用中` : noImages ? '不支持识图' : `用于${label}`}
+              {inUse ? `${label}使用中` : noImages ? `${label}需识图` : `用于${label}`}
             </button>
           )
         })}

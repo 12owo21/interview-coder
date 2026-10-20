@@ -420,3 +420,10 @@ These are read by dotenv in the main process and merged with renderer-side setti
 10. **macOS and Windows only**: Linux is not a supported or built target.
 
 11. **Prompt files are Prettier-ignored**: `src/renderer/src/lib/store/prompts/` is listed in `.prettierignore` — Prettier rewrites the literal ``` fences inside those prompts, which changes what the model is told.
+
+
+### Three-mode navigation and AI profile assignment
+
+- `src/shared/app-modes.ts` is the ordered registry for assessment → screenshot → conversation → assessment. It owns route paths, labels, profile keys, and image-input requirements; `ModeId` includes all three modes. `AppMode` in `api-profile.ts` remains the two prompt-scene/knowledge modes.
+- `ModeSwitchController` in `App.tsx` is the only `switch-mode` listener. Settings/help/tool windows do not cycle; mode pages still persist `lastMode` through their own lifecycle.
+- AI profile usage buttons and `ModeProfileSelect` use the registry. Screenshot and assessment reject known text-only profiles; unknown capabilities are allowed. Existing flat persisted profile keys and settings version remain unchanged. Deletion prefers a compatible fallback; if none exists, the selector warns that the retained fallback cannot accept images.

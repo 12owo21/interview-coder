@@ -18,6 +18,13 @@ import { createProfile, type ApiProfile } from '../api-profiles'
 import type { CaptureRegion } from '../../../../shared/capture-region'
 import { isMouseParkingRegion, type MouseParkingRegion } from '../../../../shared/mouse-parking'
 import type { AppMode } from '../../../../shared/api-profile'
+import {
+  APP_MODES,
+  getModeDefinition,
+  supportsMode,
+  fallbackModeProfile,
+  type ModeId
+} from '../../../../shared/app-modes'
 import type { HintMode } from '../../../../shared/conversation'
 import {
   DEFAULT_OCR_FILTER_MARGINS,
@@ -316,7 +323,7 @@ interface Settings {
   audioOutputDeviceId: string
 
   /** The mode shown last, restored on the next start */
-  lastMode: AppMode | 'assessment'
+  lastMode: ModeId
   /** 对话模式: hint as soon as the other side finishes a sentence, or only on the shortcut */
   conversationHintMode: HintMode
   /** 对话模式: silence (ms) after which the recogniser ends a sentence; shorter hints sooner */
@@ -351,12 +358,12 @@ interface SettingsStore extends Settings {
   /** Remove a profile; refuses to remove the last one */
   removeProfile: (id: string) => boolean
   /** Make a mode send its requests with this profile */
-  setModeProfile: (mode: AppMode, id: string) => void
+  setModeProfile: (mode: ModeId, id: string) => void
   /**
    * Step a mode to its next profile, for the keyboard shortcut. 截图模式 skips
    * the ones known not to take images. Null when there is nothing to step to.
    */
-  cycleProfile: (mode: AppMode, step?: number) => ApiProfile | null
+  cycleProfile: (mode: ModeId, step?: number) => ApiProfile | null
   /** Record that an API key has been saved, so the welcome dialog stays away */
   markApiConfigured: () => void
   /**
@@ -383,77 +390,76 @@ interface SettingsStore extends Settings {
   restorePresetScenes: (mode: AppMode) => void
 }
 
+// 新安装或持久化数据缺少字段时使用的初值；已有用户保存的值会覆盖对应默认值。
 const defaultSettings: Settings = {
-  theme: DEFAULT_THEME,
-  // Seeded on rehydrate; the id must exist up front so the active profile resolves
-  apiProfiles: [],
-  activeProfileId: 'profile-default',
-  // Filled in on rehydrate: both start out on the profile being edited
-  screenshotProfileId: '',
-  conversationProfileId: '',
-  assessmentProfileId: '',
-  assessmentMemoryEnabled: false,
-  assessmentMostLeastEnabled: false,
-  assessmentCheckSelectedAnswers: true,
-  assessmentOcrEnabled: false,
-  assessmentOcrPreviewOnly: false,
-  assessmentShowOcrDebug: false,
-  ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS },
+  theme: DEFAULT_THEME, // 界面主题，DEFAULT_THEME 当前为深色（dark），也可设为 light
+  apiProfiles: [], // 保存的 AI 配置列表，加载持久化设置时补齐初始配置
+  activeProfileId: 'profile-default', // AI 模型设置页当前编辑的配置 ID，不代表所有模式实际使用的配置
+  screenshotProfileId: '', // 截图模式使用的 AI 配置 ID，空值在加载设置时自动补齐
+  conversationProfileId: '', // 对话模式使用的 AI 配置 ID，空值在加载设置时自动补齐
+  assessmentProfileId: '', // 做题模式使用的 AI 配置 ID，空值在加载设置时自动补齐
+  assessmentMemoryEnabled: false, // 性格测评逐题记忆开关，默认不记录和引用前面题目的答案
+  assessmentMostLeastEnabled: false, // 最符合／最不符合模式，开启后按评分先选最高分、再选最低分
+  assessmentCheckSelectedAnswers: false, // 检查已选选项，默认在补充分析时跳过已选项，避免重复点击
+  assessmentOcrEnabled: true, // 做题时使用本地 OCR 文字框定位，当前默认开启
+  assessmentOcrPreviewOnly: false, // 仅预览识别与点击计划；默认关闭，允许实际点击并循环做题
+  assessmentShowOcrDebug: false, // 显示 OCR 调试图开关；预览模式下仍会显示调试图
+  ocrFilterMargins: { ...DEFAULT_OCR_FILTER_MARGINS }, // OCR 边缘过滤范围：上下左右默认各 100 原图像素，单边为 0 时不过滤该边
   assessmentPersonalityPrompt:
-    '我活泼开朗，乐于沟通，有团队合作精神；情绪稳定，自制力较强，行动前会考虑后果。自信但不自负，认真负责但不过度追求完美，能兼顾质量与效率，尊重他人的贡献。',
-  assessmentFixedClick: false,
-  assessmentFixedPositions: { A: null, B: null, C: null, D: null },
-  assessmentNextPosition: null,
-  assessmentSmoothMouse: false,
-  assessmentMouseParkingEnabled: false,
-  assessmentMouseParkingRegions: [],
-  hasConfiguredApi: false,
-  apiBaseURL: '',
-  customBaseURLs: [],
-  apiKey: '',
-  apiHeaders: '',
-  model: '',
-  disableThinking: false,
-  customModels: [],
-  customModelsByBaseURL: {},
-  modelByBaseURL: {},
-  customPrompt: PRESET_SCENE_PROMPTS[CODING_SCENE_ID],
-  conversationPrompt: PRESET_SCENE_PROMPTS[TECH_INTERVIEW_SCENE_ID],
-  scenes: createPresetScenes(),
-  activeSceneId: CODING_SCENE_ID,
-  conversationSceneId: TECH_INTERVIEW_SCENE_ID,
-  removedPresetSceneIds: [],
+    '我活泼开朗，乐于沟通，有团队合作精神；情绪稳定，自制力较强，行动前会考虑后果。自信但不自负，认真负责但不过度追求完美，能兼顾质量与效率，尊重他人的贡献。', // 个人性格描述，启用性格测评或最高／最低评分模式时加入系统提示词
+  assessmentFixedClick: false, // 固定坐标开关，开启后优先使用用户配置的选项和下一步位置
+  assessmentFixedPositions: { A: null, B: null, C: null, D: null }, // 各选项的屏幕物理像素坐标 { x, y }；null 表示未配置，可增删选项
+  assessmentNextPosition: null, // 固定的下一步按钮坐标 { x, y }，单位为屏幕物理像素；null 表示未配置
+  assessmentSmoothMouse: false, // 平滑移动鼠标开关，默认关闭；开启后沿当前实现的直线路径移动
+  assessmentMouseParkingEnabled: false, // 截图前移开鼠标的开关，默认关闭，用于减少选项悬停高亮干扰
+  assessmentMouseParkingRegions: [], // 允许鼠标停放的屏幕区域列表，物理像素坐标；空列表时不启用停放
+  hasConfiguredApi: false, // 是否曾保存过非空 API Key，用于控制首次配置引导是否显示
+  apiBaseURL: '', // 当前编辑配置的 API 地址镜像，初始为空；修改应通过配置更新方法同步
+  customBaseURLs: [], // 用户自行添加的 API 地址列表，供地址选择器复用
+  apiKey: '', // 当前编辑配置的 API Key 镜像，默认未填写
+  apiHeaders: '', // 当前编辑配置的自定义请求头，每行 Name: Value，默认无额外请求头
+  model: '', // 当前编辑配置的模型名称镜像，初始为空
+  disableThinking: false, // 当前编辑配置的关闭思考开关，默认不主动关闭模型思考
+  customModels: [], // 旧版保存的全局自定义模型列表，兼容保留，在各 API 地址下均可选
+  customModelsByBaseURL: {}, // 按规范化 API 地址分别保存的自定义模型列表
+  modelByBaseURL: {}, // 记录各 API 地址上次使用的模型，切换回该地址时可恢复
+  customPrompt: PRESET_SCENE_PROMPTS[CODING_SCENE_ID], // 截图模式系统提示词，初始使用编程场景，后续由当前场景生成
+  conversationPrompt: PRESET_SCENE_PROMPTS[TECH_INTERVIEW_SCENE_ID], // 对话模式系统提示词，初始使用技术面试场景，后续由当前场景生成
+  scenes: createPresetScenes(), // 初始化截图和对话模式的预设提示词场景列表
+  activeSceneId: CODING_SCENE_ID, // 截图模式当前场景 ID，默认选中编程场景
+  conversationSceneId: TECH_INTERVIEW_SCENE_ID, // 对话模式当前场景 ID，默认选中技术面试场景
+  removedPresetSceneIds: [], // 用户已删除的预设场景 ID，防止下次启动自动补回
 
-  opacity: 0.8,
-  resizable: true,
-  showOverlayToolbar: true,
-  hideShortcutHints: false,
-  toolbarHoverDelay: 1000,
-  screenshotDisplay: 'gallery',
-  captureScreen: CAPTURE_SCREEN_CURSOR,
-  captureRegion: null,
+  opacity: 0.8, // 窗口不透明度，范围 0.1～1；0.8 表示 80% 不透明
+  resizable: true, // 允许拖动主窗口边缘调整大小，默认开启
+  showOverlayToolbar: true, // 模式页面显示悬浮工具栏，默认开启
+  hideShortcutHints: false, // 隐藏页面底部快捷键提示文字，默认不隐藏
+  toolbarHoverDelay: 1000, // 悬停工具栏按钮触发操作的等待时间，单位毫秒；1000 为 1 秒，0 禁用悬停触发
+  screenshotDisplay: 'gallery', // 截图展示方式，gallery 表示显示全部截图缩略图
+  captureScreen: CAPTURE_SCREEN_CURSOR, // 截图屏幕选择，cursor 表示跟随鼠标所在屏幕，也可指定屏幕 ID
+  captureRegion: null, // 截图裁剪区域，null 表示截取整屏；非空时使用指定屏幕上的比例区域
 
-  screenshotAutoSave: false,
-  screenshotDir: '',
+  screenshotAutoSave: false, // 自动保存截图到磁盘，默认关闭
+  screenshotDir: '', // 截图保存目录，空值时使用系统图片目录下的 InterviewCoder 文件夹
 
-  codeAutoSave: false,
-  codeSaveDir: '',
-  codeFileBaseName: 'Test',
-  codeNamingMode: 'sequence',
-  codeCopyToClipboard: false,
+  codeAutoSave: false, // 回答完成后自动将首个代码块保存为源文件，默认关闭
+  codeSaveDir: '', // 生成代码的保存目录，未设置目录时不保存文件
+  codeFileBaseName: 'Test', // 生成代码的文件名主体，不含扩展名，默认 Test
+  codeNamingMode: 'sequence', // 代码命名策略：sequence 依次编号，overwrite 覆盖同名文件
+  codeCopyToClipboard: false, // 回答完成后自动复制首个代码块到剪贴板，默认关闭
 
-  dashscopeApiKey: '',
+  dashscopeApiKey: '', // 阿里云 DashScope 语音识别 API Key，默认未填写
 
-  hideDockIcon: false,
+  hideDockIcon: false, // 隐藏 macOS Dock 图标，默认不隐藏；其他系统不生效
 
-  audioInputDeviceId: '',
-  audioOutputDeviceId: '',
+  audioInputDeviceId: '', // 语音输入设备 ID，空值表示采集系统音频，非空表示指定麦克风
+  audioOutputDeviceId: '', // 音频上下文使用的输出设备 ID，空值表示系统默认设备
 
-  lastMode: 'screenshot',
-  conversationHintMode: 'auto',
-  conversationSilenceMs: 800,
-  conversationMinChars: 4,
-  conversationTranscriptHidden: false
+  lastMode: 'screenshot', // 上次停留的模式，初次启动为截图模式，后续按保存的模式恢复
+  conversationHintMode: 'auto', // 对话提示触发方式：auto 自动生成，manual 由用户手动触发
+  conversationSilenceMs: 800, // 语音识别判定一句话结束的静音时长，单位毫秒，默认 800
+  conversationMinChars: 4, // 自动生成对话提示所需的最少有效字符数，默认 4，标点等不计入
+  conversationTranscriptHidden: false // 隐藏对话模式转录文字列，默认显示；隐藏后提示区域可占满宽度
 }
 
 export const useSettingsStore = create<SettingsStore>()(
@@ -591,13 +597,11 @@ export const useSettingsStore = create<SettingsStore>()(
         const apiProfiles = state.apiProfiles.filter((p) => p.id !== id)
         // A mode that used it hands over to its neighbour
         const next = apiProfiles[Math.min(index, apiProfiles.length - 1)]
-        const modeProfiles = {
-          screenshotProfileId:
-            state.screenshotProfileId === id ? next.id : state.screenshotProfileId,
-          conversationProfileId:
-            state.conversationProfileId === id ? next.id : state.conversationProfileId,
-          assessmentProfileId:
-            state.assessmentProfileId === id ? next.id : state.assessmentProfileId
+        const modeProfiles: Partial<Settings> = {}
+        for (const mode of APP_MODES) {
+          if (state[mode.profileKey] === id) {
+            modeProfiles[mode.profileKey] = fallbackModeProfile(mode.id, apiProfiles, next.id)!.id
+          }
         }
         if (id !== state.activeProfileId) {
           set({ apiProfiles, ...modeProfiles })
@@ -617,16 +621,16 @@ export const useSettingsStore = create<SettingsStore>()(
         return true
       },
       setModeProfile: (mode, id) => {
-        if (!get().apiProfiles.some((p) => p.id === id)) return
-        set(mode === 'screenshot' ? { screenshotProfileId: id } : { conversationProfileId: id })
+        const profile = get().apiProfiles.find((p) => p.id === id)
+        if (!profile || !supportsMode(profile, mode)) return
+        set({ [getModeDefinition(mode).profileKey]: id })
       },
       cycleProfile: (mode, step = 1) => {
         const state = get()
-        const currentId =
-          mode === 'screenshot' ? state.screenshotProfileId : state.conversationProfileId
+        const currentId = state[getModeDefinition(mode).profileKey]
         // Stepping onto a profile that cannot read screenshots would only fail
         const candidates = state.apiProfiles.filter(
-          (p) => mode !== 'screenshot' || p.vision !== false || p.id === currentId
+          (p) => supportsMode(p, mode) || p.id === currentId
         )
         if (candidates.length < 2) return null
         const index = Math.max(
@@ -841,16 +845,14 @@ export const useSettingsStore = create<SettingsStore>()(
         )
         state.apiProfiles = reconcileApiProfiles(state)
         // Before modes existed the profile being edited was the one in use
-        for (const key of [
-          'screenshotProfileId',
-          'conversationProfileId',
-          'assessmentProfileId'
-        ] as const) {
+        for (const mode of APP_MODES) {
+          const key = mode.profileKey
           if (!state.apiProfiles.some((p) => p.id === state[key])) {
-            state[key] =
-              key !== 'screenshotProfileId' && state.screenshotProfileId
-                ? state.screenshotProfileId
-                : state.activeProfileId
+            state[key] = fallbackModeProfile(
+              mode.id,
+              state.apiProfiles,
+              state.screenshotProfileId || state.activeProfileId
+            )!.id
           }
         }
         return state

@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Camera, HelpCircle, MessagesSquare, MousePointerClick, SettingsIcon, X } from 'lucide-react'
+import {
+  Camera,
+  HelpCircle,
+  MessagesSquare,
+  MousePointerClick,
+  SettingsIcon,
+  X
+} from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/lib/store/app'
-import { useSettingsStore, type AppMode } from '@/lib/store/settings'
+import { useSettingsStore } from '@/lib/store/settings'
 import { useSolutionStore } from '@/lib/store/solution'
 import { formatDuration } from '@/lib/utils/duration'
 import { useElapsed } from '@/lib/use-elapsed'
-import { MODE_NAMES, MODE_PATHS } from '@/lib/use-mode-page'
+import { APP_MODES, MODE_NAMES, MODE_PATHS, type ModeId } from '../../../shared/app-modes'
 
-type HeaderMode = AppMode | 'assessment'
+type HeaderMode = ModeId
 
 const TITLES: Record<HeaderMode, string> = {
   screenshot: '截屏解题',
@@ -80,10 +87,7 @@ export function AppHeader({ mode }: { mode: HeaderMode }) {
         </span>
       )}
       <div className={`actions flex items-center ${ignoreMouse ? 'pointer-events-none' : ''}`}>
-        <ModeSwitch
-          mode={mode}
-          onSwitch={(next) => navigate(MODE_PATHS[next])}
-        />
+        <ModeSwitch mode={mode} onSwitch={(next) => navigate(MODE_PATHS[next])} />
         <Button
           variant="ghost"
           className="size-8 cursor-pointer hover:opacity-50"
@@ -110,16 +114,19 @@ export function AppHeader({ mode }: { mode: HeaderMode }) {
   )
 }
 
-/** Two icon buttons, the current mode lit; no `title`, which would draw outside content protection */
-function ModeSwitch({ mode, onSwitch }: { mode: HeaderMode; onSwitch: (mode: HeaderMode) => void }) {
-  const items: { value: HeaderMode; Icon: typeof Camera }[] = [
-    { value: 'assessment', Icon: MousePointerClick },
-    { value: 'screenshot', Icon: Camera },
-    { value: 'conversation', Icon: MessagesSquare }
-  ]
+/** Mode icon buttons, the current mode lit; no `title`, which would draw outside content protection */
+function ModeSwitch({
+  mode,
+  onSwitch
+}: {
+  mode: HeaderMode
+  onSwitch: (mode: HeaderMode) => void
+}) {
+  const icons = { assessment: MousePointerClick, screenshot: Camera, conversation: MessagesSquare }
+  const items = APP_MODES.map((item) => ({ ...item, value: item.id, Icon: icons[item.id] }))
   return (
     <div className="mr-1 flex items-center rounded-md bg-app-chip p-0.5" aria-label="切换模式">
-      {items.map(({ value, Icon }) => (
+      {items.map(({ value, Icon, shortLabel }) => (
         <button
           key={value}
           aria-label={MODE_NAMES[value]}
@@ -132,9 +139,7 @@ function ModeSwitch({ mode, onSwitch }: { mode: HeaderMode; onSwitch: (mode: Hea
           onClick={() => value !== mode && onSwitch(value)}
         >
           <Icon className="size-3.5" />
-          <span className="max-[520px]:hidden">
-            {value === 'screenshot' ? '截图' : value === 'conversation' ? '对话' : '做题'}
-          </span>
+          <span className="max-[520px]:hidden">{shortLabel}</span>
         </button>
       ))}
     </div>

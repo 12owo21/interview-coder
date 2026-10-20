@@ -63,7 +63,7 @@ export function CustomShortcuts() {
           <Shortcut label="隐藏/显示窗口" shortcut="hideOrShowMainWindow" />
           <Shortcut
             label="切换模式"
-            description="在截图模式和对话模式之间切换"
+            description="依次切换：做题 → 截图 → 对话 → 做题"
             shortcut="switchMode"
           />
           <Shortcut

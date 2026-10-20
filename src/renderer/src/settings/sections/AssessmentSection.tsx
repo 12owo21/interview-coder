@@ -4,13 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
+import { ModeProfileSelect } from '../ModeProfileSelect'
 import { useSettingsStore } from '@/lib/store/settings'
 import { Field, SettingsCard } from '../components'
 import { LocalOcrPanel } from '../LocalOcrPanel'
@@ -18,8 +12,6 @@ import { AssessmentMouseSettings } from '../AssessmentMouseSettings'
 
 export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: string) => void }) {
   const {
-    apiProfiles,
-    assessmentProfileId,
     assessmentMemoryEnabled,
     assessmentMostLeastEnabled,
     assessmentCheckSelectedAnswers,
@@ -32,7 +24,6 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
     assessmentShowOcrDebug,
     updateSetting
   } = useSettingsStore()
-  const selected = apiProfiles.find((profile) => profile.id === assessmentProfileId)
   const [draftPositions, setDraftPositions] = useState(
     () =>
       Object.fromEntries(
@@ -57,35 +48,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
         做题模式会把快捷键截取的屏幕截图发送给这里选择的视觉模型。API 地址、Key、模型和请求头在「AI
         模型」中编辑。
       </p>
-      <Field
-        label="使用的 AI 配置"
-        note={
-          selected ? (
-            <button
-              className="ml-1 cursor-pointer text-blue-700 hover:underline"
-              onClick={() => onEditProfile(selected.id)}
-            >
-              编辑
-            </button>
-          ) : undefined
-        }
-      >
-        <Select
-          value={assessmentProfileId || undefined}
-          onValueChange={(id) => updateSetting('assessmentProfileId', id)}
-        >
-          <SelectTrigger className="w-60 shrink-0 bg-white">
-            <SelectValue placeholder="选择配置" />
-          </SelectTrigger>
-          <SelectContent>
-            {apiProfiles.map((profile) => (
-              <SelectItem key={profile.id} value={profile.id} disabled={profile.vision === false}>
-                {profile.name || '未命名配置'}（{profile.model || '未设置模型'}）
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
+      <ModeProfileSelect mode="assessment" onEdit={onEditProfile} />
       <div className="mt-5 space-y-3 border-t border-gray-400/40 pt-4">
         <AssessmentMouseSettings />
         <Field

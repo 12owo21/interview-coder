@@ -1,31 +1,17 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { useSettingsStore, type AppMode } from './store/settings'
 import { useAppStore } from './store/app'
 
-export const MODE_PATHS: Record<AppMode | 'assessment', string> = {
-  assessment: '/assessment',
-  screenshot: '/',
-  conversation: '/conversation'
-}
-
-export const MODE_NAMES: Record<AppMode | 'assessment', string> = {
-  assessment: '做题模式',
-  screenshot: '截图模式',
-  conversation: '对话模式'
-}
-
-export const otherMode = (mode: AppMode): AppMode =>
-  mode === 'screenshot' ? 'conversation' : 'screenshot'
+import { MODE_NAMES } from '../../../shared/app-modes'
+export { MODE_PATHS, MODE_NAMES } from '../../../shared/app-modes'
 
 /**
  * What both mode pages do alike: tell main which page is up, apply the window
  * opacity, and answer the shortcuts that act on "the current mode" — its AI
- * profile, its prompt scene, and switching to the other mode.
+ * profile, and its prompt scene.
  */
 export function useModePage(mode: AppMode): void {
-  const navigate = useNavigate()
   const opacity = useSettingsStore((state) => state.opacity)
   const syncAppState = useAppStore((state) => state.syncAppState)
 
@@ -107,11 +93,4 @@ export function useModePage(mode: AppMode): void {
       window.api.removeThinkingUnsupportedListener()
     }
   }, [])
-
-  useEffect(() => {
-    window.api.onSwitchMode(() => navigate(MODE_PATHS[otherMode(mode)]))
-    return () => {
-      window.api.removeSwitchModeListener()
-    }
-  }, [mode, navigate])
 }

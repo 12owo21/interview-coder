@@ -1,5 +1,5 @@
 /**
- * The two ways the app is used: 截图模式 answers screenshots, 对话模式 turns
+ * The two modes with configurable prompt scenes: 截图模式 answers screenshots, 对话模式 turns
  * what the other side of a call says into hints. Each picks its own AI profile
  * and has its own prompt scenes.
  */
@@ -27,7 +27,7 @@ export interface ApiProfile {
   /**
    * Whether the model takes image input: true / false when the platform's model
    * list, the preset table or a refused screenshot said so, absent when unknown.
-   * Only 截图模式 needs it; 对话模式 sends text alone.
+   * 截图模式 and 做题模式 need it; 对话模式 sends text alone.
    */
   vision?: boolean
 }

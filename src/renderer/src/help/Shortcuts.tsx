@@ -60,7 +60,7 @@ const getCategoryName = (category: string) => {
 const getShortcutDescription = (action: string) => {
   const descriptionMap: Record<string, string> = {
     hideOrShowMainWindow: '隐藏/显示窗口',
-    switchMode: '切换截图模式 / 对话模式',
+    switchMode: '依次切换：做题 → 截图 → 对话 → 做题',
     ignoreOrEnableMouse: '鼠标穿透(窗口对鼠标隐身)',
     increaseOpacity: '提高不透明度(窗口更清晰)',
     decreaseOpacity: '提高透明度(窗口更透明)',

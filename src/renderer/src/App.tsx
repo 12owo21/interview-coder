@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { HashRouter, Routes, Route, useLocation } from 'react-router'
+import { useEffect, useRef, useState } from 'react'
+import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router'
 import { Toaster, toast } from 'sonner'
 import CoderPage from '@/coder'
 import ConversationPage from '@/conversation'
@@ -12,7 +12,7 @@ import { useShortcutsStore } from '@/lib/store/shortcuts'
 import { getCloneableFields } from '@/lib/utils'
 import { applyTheme } from '@/lib/theme'
 import { WindowResizeHandles } from '@/components/WindowResizeHandles'
-import { MODE_PATHS } from '@/lib/use-mode-page'
+import { MODE_PATHS, nextModePath } from '../../shared/app-modes'
 
 export default function App() {
   const [initialized, setInitialized] = useState(false)
@@ -86,6 +86,7 @@ export default function App() {
   return (
     <>
       <HashRouter>
+        <ModeSwitchController />
         <ToolbarVisibilityController />
         <WindowResizeController />
         <Routes>
@@ -122,6 +123,31 @@ function ToolbarVisibilityController() {
     const onModePage = Object.values(MODE_PATHS).includes(location.pathname)
     void window.api.setToolbarVisible(onModePage && showOverlayToolbar)
   }, [location.pathname, showOverlayToolbar])
+
+  return null
+}
+
+/** A single listener covers every mode, including assessment. */
+function ModeSwitchController() {
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const currentPath = useRef(pathname)
+
+  useEffect(() => {
+    currentPath.current = pathname
+  }, [pathname])
+
+  useEffect(() => {
+    if (pathname === '/toolbar') return
+    window.api.onSwitchMode(() => {
+      const next = nextModePath(currentPath.current)
+      if (!next) return
+      // Advance immediately so rapid key presses do not reuse the previous route.
+      currentPath.current = next
+      navigate(next)
+    })
+    return () => window.api.removeSwitchModeListener()
+  }, [navigate, pathname])
 
   return null
 }

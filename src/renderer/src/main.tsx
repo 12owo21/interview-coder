@@ -6,6 +6,7 @@ import App from './App'
 import RegionPicker from './region-picker'
 import { useSettingsStore } from './lib/store/settings'
 import { applyTheme } from './lib/theme'
+import { MODE_PATHS } from '../../shared/app-modes'
 
 // Paint before the first render: zustand rehydrates from localStorage
 // synchronously, so the persisted theme is available here (no dark flash).
@@ -15,8 +16,7 @@ applyTheme(useSettingsStore.getState().theme)
 // the toolbar and the region pickers load their own routes and are left alone
 if (!window.location.hash || window.location.hash === '#/') {
   const { lastMode } = useSettingsStore.getState()
-  if (lastMode === 'conversation') window.location.hash = '#/conversation'
-  if (lastMode === 'assessment') window.location.hash = '#/assessment'
+  window.location.hash = `#${MODE_PATHS[lastMode] ?? '/'}`
 }
 
 // The capture-region picker is a throwaway window per screen: it must not run
