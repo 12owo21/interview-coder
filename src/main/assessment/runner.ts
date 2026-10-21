@@ -379,6 +379,21 @@ export class AssessmentRunner {
               .flatMap((step) => (step.answer ? [step.answer] : []))
           ]
         }
+        // A content change may be automatic advancement after an answer. Do not
+        // click stale targets, but still clear the cursor before refreshing.
+        // Geometry changes and cancellation must never move to old coordinates.
+        if (parkingPoint && result.executedSteps > 0 && error.canPark) {
+          checkAborted(signal)
+          phase('parking')
+          try {
+            await deps.executor.park(parkingPoint, signal, config.smoothMouse)
+          } catch (parkingError) {
+            checkAborted(signal)
+            throw new Error(
+              `页面变化后已停止剩余点击，但鼠标停放失败：${parkingError instanceof Error ? parkingError.message : String(parkingError)}`
+            )
+          }
+        }
       }
       throw error
     } finally {

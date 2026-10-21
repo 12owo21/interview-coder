@@ -13,7 +13,10 @@ export interface AssessmentRecovery {
 export class AssessmentPageChangedError extends Error {
   recovery?: AssessmentRecovery
 
-  constructor(message = '题目或待点击区域发生变化') {
+  constructor(
+    message = '题目或待点击区域发生变化',
+    readonly canPark = false
+  ) {
     super(message)
     this.name = 'AssessmentPageChangedError'
   }

@@ -15,7 +15,7 @@ export const SCORE_SELECTION_INSTRUCTIONS =
 export function scoringResponseFormat(strategy: AssessmentStrategy): string {
   const option =
     strategy === 'ocr'
-      ? { text: '引用的OCR原文', regionIds: ['正文框ID'], clickRegionId: '正文框ID' }
+      ? { text: '截图中的完整选项原文', regionIds: ['正文框ID'], clickRegionId: '正文框ID' }
       : strategy === 'fixed'
         ? { text: '选项原文' }
         : { text: '选项原文', left: 0, top: 0, right: 20, bottom: 20 }

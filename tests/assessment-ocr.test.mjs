@@ -151,15 +151,14 @@ test('validated text removes option labels before personality memory matching', 
   assert.equal(parsed.options.A.text, '第一行内容\n这是续行')
 })
 
-test('model text differences use OCR text without rejecting valid region references', () => {
+test('model text is preserved without changing validated OCR click references', () => {
   for (const modelText of ['第一行内容；这是续行', '模型改写后的选项']) {
     const { ocr, response } = fixture()
     response.options.A.text = modelText
     const parsed = validate(response, ocr)
-    assert.equal(parsed.options.A.text, '第一行内容\n这是续行')
+    assert.equal(parsed.options.A.text, modelText)
     assert.equal(parsed.options.A.clickRegionId, 'r002')
-    assert.equal(parsed.notices.length, 1)
-    assert.match(parsed.notices[0], /选项 A.*OCR 原文/)
+    assert.equal(parsed.notices.length, 0)
   }
 })
 
@@ -496,7 +495,7 @@ function harness(options = {}) {
         check: async () => {
           guards++
           if (options.failGuardAt === guards || options.failGuards?.includes(guards))
-            throw new AssessmentPageChangedError('page changed')
+            throw new AssessmentPageChangedError('page changed', options.canPark !== false)
         }
       })
     },
@@ -672,7 +671,7 @@ test('OCR pipeline clicks ordered first-line centers then next, uses one image a
   assert.ok(h.memory.snapshot().context)
 })
 
-test('reported B colon/semicolon difference completes once and stores OCR text', async () => {
+test('reported B colon/semicolon difference completes once and stores model text', async () => {
   const { ocr } = fixture()
   const first =
     '更换上网方式：建议用手机分享WiFi热点，通过电脑连接手机WiFi上网：或者更换到WiFi信号强的地方再次尝试，不建议使用校园网'
@@ -703,12 +702,10 @@ test('reported B colon/semicolon difference completes once and stores OCR text',
     { x: 1300, y: 1630 }
   ])
   const result = c.getSnapshot().result
-  assert.equal(result.optionTexts.B, first + '\n' + continuation)
+  assert.equal(result.optionTexts.B, first.replace('上网：', '上网；') + continuation)
   assert.ok(result.raw.includes('上网；'))
-  assert.match(result.notices[0], /选项 B.*OCR 原文/)
-  assert.match(c.getSnapshot().notice, /选项 B.*OCR 原文/)
-  assert.ok(h.memory.snapshot().context.includes('上网：'))
-  assert.ok(!h.memory.snapshot().context.includes('上网；'))
+  assert.deepEqual(result.notices, [])
+  assert.ok(h.memory.snapshot().context.includes('上网；'))
   assert.ok(states.every((s) => s.error === null && s.phase !== 'refreshing'))
 })
 
@@ -1243,4 +1240,77 @@ test('preview shortcut performs one round without a loop delay', async () => {
   )
   assert.equal(await c.toggleLoop(), true)
   assert.equal(calls, 1)
+})
+
+test('page change after answers parks once and preserves recovery without clicking next', async () => {
+  const h = harness({
+    config: { mouseParkingEnabled: true, mouseParkingRegions: [parkingRegion], smoothMouse: true },
+    failGuardAt: 3
+  })
+  await assert.rejects(h.run(), (error) => {
+    assert.ok(error instanceof AssessmentPageChangedError)
+    assert.deepEqual(error.recovery.executedAnswers, ['B', 'A'])
+    return true
+  })
+  assert.equal(h.clicks.length, 2)
+  assert.equal(h.parked.length, 1)
+  assert.equal(h.parked[0].movement.smooth, true)
+  assert.equal(h.last.result.execution, 'partial')
+  assert.equal(h.memory.snapshot().context, '')
+})
+
+test('page change does not park before clicks, when disabled, or after geometry changes', async () => {
+  for (const settings of [
+    { failGuardAt: 1 },
+    { failGuardAt: 2, canPark: false },
+    { failGuardAt: 2, config: { mouseParkingEnabled: false } }
+  ]) {
+    const h = harness({
+      config: { mouseParkingEnabled: true, mouseParkingRegions: [parkingRegion] },
+      ...settings
+    })
+    await assert.rejects(h.run(), AssessmentPageChangedError)
+    assert.equal(h.parked.length, 0)
+  }
+})
+
+test('parking failure during interrupted clicks stops instead of retrying the answer', async () => {
+  const h = harness({
+    config: { mouseParkingEnabled: true, mouseParkingRegions: [parkingRegion] },
+    failGuardAt: 3,
+    onPark: () => {
+      throw new AssessmentPageChangedError('parking failed')
+    }
+  })
+  await assert.rejects(h.run(), (error) => {
+    assert.ok(!(error instanceof AssessmentPageChangedError))
+    return /停放失败/.test(error.message)
+  })
+  assert.equal(h.clicks.length, 2)
+  assert.equal(h.parked.length, 1)
+})
+
+test('complete math option text survives label-only and incomplete OCR in execution results', async () => {
+  const h = harness({
+    ask: async (response) => {
+      response.options.A = { text: '-0.5', regionIds: ['r002'], clickRegionId: 'r002' }
+      response.options.B = { text: '0.5', regionIds: ['r003'], clickRegionId: 'r003' }
+      response.options.C = { text: '50', regionIds: ['r004'], clickRegionId: 'r004' }
+      response.options.D = { text: '-50', regionIds: ['r005'], clickRegionId: 'r005' }
+      return JSON.stringify(response)
+    },
+    ocr: {
+      ...fixture().ocr,
+      regions: [
+        row('15. 相对误差为？', 100),
+        row('-0.5', 200),
+        row('B', 250),
+        row('50', 300),
+        row('D -50', 350),
+        row('下一步', 800)
+      ]
+    }
+  })
+  await h.run()
+  assert.deepEqual(h.last.result.optionTexts, { A: '-0.5', B: '0.5', C: '50', D: '-50' })
 })

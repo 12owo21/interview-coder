@@ -138,10 +138,6 @@ function rectPoint(value: { left?: number; top?: number; right?: number; bottom?
   return { x: (left + right) / 2, y: (top + bottom) / 2 }
 }
 
-function normalizedText(value: string): string {
-  return stripOptionLabel(value.normalize('NFKC')).replace(/\s+/g, '')
-}
-
 export class AssessmentResponseValidator {
   parseAndValidate(
     raw: string,
@@ -186,17 +182,11 @@ export class AssessmentResponseValidator {
       const notices: string[] = []
       for (const [key, option] of Object.entries(value.options)) {
         // The model supplies reading order. Do not re-sort by geometry or enforce local groups.
-        const rows = claim(option.regionIds, `选项 ${key}`)
+        claim(option.regionIds, `选项 ${key}`)
         if (!option.regionIds.includes(option.clickRegionId))
           throw new ModelResultValidationError(`选项 ${key} 的点击框不属于该选项`)
-        const body = rows.length > 1 ? rows.filter((r) => r.text.trim() !== key) : rows
-        const ocrText = stripOptionLabel(body.map((r) => r.text).join('\n')).trim()
-        if (!ocrText) throw new ModelResultValidationError(`选项 ${key} 引用的 OCR 框没有有效正文`)
-        if (normalizedText(option.text) !== normalizedText(ocrText))
-          notices.push(`选项 ${key} 的文字已采用 OCR 原文，继续执行`)
-        // IDs determine the target; model paraphrasing must neither block nor trigger a retry.
-        // Canonical OCR text also keeps display and personality memory consistent.
-        option.text = ocrText
+        // OCR references determine targets; keep the model's image-based transcription
+        // for display and memory, even when OCR only recognized a label or partial number.
       }
       if (value.next.required) {
         if (value.next.kind === 'submit') throw new Error('检测到提交操作，请手动确认提交范围')

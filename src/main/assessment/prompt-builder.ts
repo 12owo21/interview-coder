@@ -42,12 +42,12 @@ export class AssessmentPromptBuilder {
       common.push(
         config.mostLeastEnabled
           ? scoringResponseFormat(config.strategy)
-          : '使用 OCR 协议 v3：{"schemaVersion":3,"captureId":"输入的captureId","status":"ok","question":"完整题干","questionRegionIds":["题干框ID"],"answers":["A"],"options":{"A":{"text":"引用的OCR原文","regionIds":["字母框ID","正文框ID"],"clickRegionId":"正文框ID"}},"next":{"required":false}}。',
+          : '使用 OCR 协议 v3：{"schemaVersion":3,"captureId":"输入的captureId","status":"ok","question":"完整题干","questionRegionIds":["题干框ID"],"answers":["A"],"options":{"A":{"text":"截图中的完整选项原文","regionIds":["字母框ID","正文框ID"],"clickRegionId":"正文框ID"}},"next":{"required":false}}。',
         '需要下一步时 next={"required":true,"kind":"next","clickRegionId":"按钮文字框ID"}。不能返回任何 x/y 或矩形坐标，也不能返回 questionBlockId。',
         '输入 ocr.regions 是经过用户边缘过滤的原始 OCR 文字框，没有本地题块或候选分组。结合截图自行区分正文、侧栏、题号进度、水印和操作按钮，只处理第一道完整题目。',
         'questionRegionIds 引用题干和解题所需材料的文字框，用于点击前确认页面未改变。每个选项的 regionIds 按阅读顺序包含其正文全部续行及可见的独立字母框。题干、不同选项和下一步之间不能重复引用同一框。',
         '每个选项必须给出 clickRegionId，它必须属于该选项的 regionIds。优先选择可点击的正文文字框；程序只会点击该 OCR 框中心，不能点击多个框之间的空白。',
-        'options.text 尽量保留引用的 OCR 正文原文，可移除开头的选项字母和调整换行。程序会根据 regionIds 使用 OCR 原文作为最终选项文字；准确选择文字框 ID 是关键。结合截图理解 OCR 错字、断行及下一题被识别成下—题等情况，再选择正确的文字框 ID。',
+        'options.text 返回截图中的完整选项正文，可移除开头的选项字母和调整换行；结合截图纠正 OCR 错字、漏字、数字、正负号和小数点，不要改写或概括。程序保留此文本用于展示和记忆，regionIds 仅用于定位。无法从截图确认正文时返回 uncertain，不要猜测。结合截图识别下一题被 OCR 识别成下—题等情况，选择正确的文字框 ID。',
         '不要按固定间距、缩进或栏数猜测选项归属；只有明确属于当前题目且点击文字可选择时才返回 ok。只有图片、文字框混合多个选项、题目截断、只能点独立控件或无法确认点击目标时返回 uncertain。',
         config.mostLeastEnabled
           ? SCORE_UNCERTAIN_FORMAT
