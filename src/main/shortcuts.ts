@@ -123,7 +123,7 @@ function getOffscreenPosition(): [number, number] {
   const maxRight = Math.max(...displays.map((display) => display.bounds.x + display.bounds.width))
   const topMost = Math.min(...displays.map((display) => display.bounds.y))
 
-  return [maxRight + 2000, topMost]
+  return [maxRight - 2000, topMost]
 }
 
 function softHideWindow(window: BrowserWindow) {

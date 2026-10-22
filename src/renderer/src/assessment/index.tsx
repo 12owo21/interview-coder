@@ -112,8 +112,8 @@ export default function AssessmentPage() {
               停止做题
             </Button>
           )}
-          <p className="mt-2 text-xs opacity-60">
-            做题快捷键切换循环开始/停止；OCR 预览模式只分析一次。
+          <p className="mt-2 text-base opacity-80">
+            按下做题快捷键(默认Ctrl+Q)切换循环开始/停止
           </p>
           {snapshot?.debug && <OcrDebugPanel debug={snapshot.debug} />}
           <AiInputPanel input={snapshot?.rawInput ?? null} />
