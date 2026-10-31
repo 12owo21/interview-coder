@@ -162,6 +162,15 @@ export const settings = {
   /** Copy the code block of a finished answer to the system clipboard */
   codeCopyToClipboard: false,
   dashscopeApiKey: '',
+  /** 手机同步 over the LAN: the app serves the phone page itself, see mobile-sync.ts */
+  mobileLanEnabled: false,
+  /** The LAN page's secret, made by the renderer on first use; a new one voids every QR code */
+  mobileLanKey: '',
+  /** 手机同步 through relay/server.mjs on a public server */
+  mobileRelayEnabled: false,
+  mobileRelayURL: '',
+  /** The server's RELAY_KEY */
+  mobileRelayKey: '',
   hideDockIcon: false,
   audioInputDeviceId: '',
   audioOutputDeviceId: ''

@@ -10,6 +10,7 @@ import {
   MousePointerClick,
   Mic,
   Palette,
+  Smartphone,
   type LucideIcon
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,12 +26,14 @@ import { ScreenshotSection } from './sections/ScreenshotSection'
 import { ConversationSection } from './sections/ConversationSection'
 import { KnowledgeSection } from './sections/KnowledgeSection'
 import { AssessmentSection } from './sections/AssessmentSection'
+import { MobileSection } from './sections/MobileSection'
 
 type Tab =
   | 'ai'
   | 'knowledge'
   | 'voice'
   | 'appearance'
+  | 'mobile'
   | 'shortcuts'
   | 'screenshot'
   | 'conversation'
@@ -48,6 +51,7 @@ const NAV: { heading: string; items: { tab: Tab; label: string; Icon: LucideIcon
       { tab: 'knowledge', label: '资料库', Icon: LibraryBig },
       { tab: 'voice', label: '语音', Icon: Mic },
       { tab: 'appearance', label: '界面与隐私', Icon: Palette },
+      { tab: 'mobile', label: '手机同步', Icon: Smartphone },
       { tab: 'shortcuts', label: '快捷键', Icon: Keyboard }
     ]
   },
@@ -114,6 +118,7 @@ export default function SettingsPage() {
     knowledge: <KnowledgeSection />,
     voice: <VoiceSection />,
     appearance: <AppearanceSection />,
+    mobile: <MobileSection />,
     shortcuts: <ShortcutsSection />,
     screenshot: (
       <ScreenshotSection onEditProfile={editProfile} onOpenKnowledge={() => openTab('knowledge')} />

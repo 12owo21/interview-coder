@@ -427,3 +427,12 @@ These are read by dotenv in the main process and merged with renderer-side setti
 - `src/shared/app-modes.ts` is the ordered registry for assessment → screenshot → conversation → assessment. It owns route paths, labels, profile keys, and image-input requirements; `ModeId` includes all three modes. `AppMode` in `api-profile.ts` remains the two prompt-scene/knowledge modes.
 - `ModeSwitchController` in `App.tsx` is the only `switch-mode` listener. Settings/help/tool windows do not cycle; mode pages still persist `lastMode` through their own lifecycle.
 - AI profile usage buttons and `ModeProfileSelect` use the registry. Screenshot and assessment reject known text-only profiles; unknown capabilities are allowed. Existing flat persisted profile keys and settings version remain unchanged. Deletion prefers a compatible fallback; if none exists, the selector warns that the retained fallback cannot accept images.
+
+### 手机同步（移植自上游 f506378）
+
+- `src/main/mobile-sync.ts` 通过 `registerMobileSource` 读取截图回答和对话提示，最多每 200ms 发布完整状态。`shortcuts.ts` 继续使用本项目的字符串流，不能直接套用上游 reasoning StreamChunk；`conversation.ts` 在原有发送入口通知同步。
+- 只同步截图/对话文本，不发送截图图片、配置或 API Key；做题模式不注册同步源，手机保留最后的截图/对话页，做题翻页不触发 `pageMobile`。新增第三种手机页面需同步扩展协议和手机前端，不得直接将完整 assessment 快照（含原始请求）暴露给手机。
+- `mobileLanEnabled` / `mobileRelayEnabled` 默认关闭，其余设置为 `mobileLanKey`、`mobileRelayURL`、`mobileRelayKey`；保持持久化 v8。设置页面通过 `mobile:get-status` 获取状态和二维码链接。
+- 局域网监听 `0.0.0.0:8790`；公网中转独立部署 `relay/server.mjs`。两者共用 `relay/relay.mjs` 和 `relay/public/` 页面；页面通过 `?raw` 内联进入主进程产物，当前打包白名单不包含独立 relay 源文件。
+- 手机通过 HMAC 派生的只读 token 鉴权，不能提交状态或调用桌面 IPC。HTTP/WS 是明文；公网按 `relay/README.md` 配置 HTTPS/WSS。二维码链接视同只读密码，不写日志。
+- 退出应用时关闭 LAN 服务、公网连接和相关计时器；被替换的 host 不得继续推送状态。新增回归见 `tests/mobile-sync.test.mjs`、`tests/mobile-relay.test.mjs`。

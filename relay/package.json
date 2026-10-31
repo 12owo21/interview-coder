@@ -1,0 +1,16 @@
+{
+  "name": "interview-coder-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Relay between the desktop app and phones: the app pushes its state, phones watch it",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  }
+}

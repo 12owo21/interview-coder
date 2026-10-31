@@ -317,6 +317,16 @@ interface Settings {
 
   dashscopeApiKey: string
 
+  /** 手机同步 over the LAN: the app serves the phone page itself */
+  mobileLanEnabled: boolean
+  /** The LAN page's secret, made on first use; a new one voids every QR code */
+  mobileLanKey: string
+  /** 手机同步 through relay/server.mjs on a public server */
+  mobileRelayEnabled: boolean
+  mobileRelayURL: string
+  /** The server's RELAY_KEY */
+  mobileRelayKey: string
+
   hideDockIcon: boolean
 
   audioInputDeviceId: string
@@ -392,6 +402,11 @@ interface SettingsStore extends Settings {
 
 // 新安装或持久化数据缺少字段时使用的初值；已有用户保存的值会覆盖对应默认值。
 const defaultSettings: Settings = {
+  mobileLanEnabled: false,
+  mobileLanKey: '',
+  mobileRelayEnabled: false,
+  mobileRelayURL: '',
+  mobileRelayKey: '',
   theme: DEFAULT_THEME, // 界面主题，DEFAULT_THEME 当前为深色（dark），也可设为 light
   apiProfiles: [], // 保存的 AI 配置列表，加载持久化设置时补齐初始配置
   activeProfileId: 'profile-default', // AI 模型设置页当前编辑的配置 ID，不代表所有模式实际使用的配置
