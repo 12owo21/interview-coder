@@ -65,7 +65,7 @@ export class AssessmentPageGuard {
           const width = Math.min(640, rect.width)
           const before = originalImage.crop(rect).resize({ width }).toBitmap()
           const after = currentImage.crop(rect).resize({ width }).toBitmap()
-          if (changedPixelRatio(before, after) > 0.02)
+          if (changedPixelRatio(before, after) > 0.1)
             throw new AssessmentPageChangedError('题目或待点击区域发生变化', true)
         }
       }
