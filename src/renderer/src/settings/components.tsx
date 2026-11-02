@@ -58,11 +58,13 @@ export function Field({
 /** Settings few people touch, folded away until asked for */
 export function Advanced({
   children,
-  defaultOpen = false
+  defaultOpen = false,
+  label = '高级'
 }: {
   children: ReactNode
   /** Start unfolded, e.g. when one of them is already set */
   defaultOpen?: boolean
+  label?: string
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -72,7 +74,7 @@ export function Advanced({
         onClick={() => setOpen(!open)}
       >
         <ChevronRight className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-90')} />
-        高级
+        {label}
       </button>
       {open && <div className="mt-3 space-y-4 pl-4 border-l-2 border-gray-400/70">{children}</div>}
     </div>

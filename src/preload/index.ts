@@ -11,6 +11,7 @@ import type { ConversationSnapshot, HintCard, Utterance } from '../shared/conver
 import type { KnowledgeDoc, KnowledgeImportResult, KnowledgePatch } from '../shared/knowledge'
 import type { AssessmentResult, AssessmentSnapshot } from '../shared/assessment'
 import type { LocalOcrStatus, OcrResult } from '../shared/ocr'
+import type { MobileSyncStatus } from '../shared/mobile'
 
 // Custom APIs for renderer
 const api = {
@@ -324,6 +325,8 @@ const api = {
   // Select the directory the generated code is written to
   selectCodeDir: () => ipcRenderer.invoke('selectCodeDir') as Promise<string | null>,
 
+  // 手机同步: whether the LAN page / relay connection is up, and the URLs for the QR codes
+  getMobileStatus: () => ipcRenderer.invoke('mobile:get-status') as Promise<MobileSyncStatus>,
   // 对话模式: main owns the conversation, the page takes a snapshot and follows the events
   getConversationSnapshot: () =>
     ipcRenderer.invoke('conversation:get-snapshot') as Promise<ConversationSnapshot>,

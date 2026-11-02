@@ -35,6 +35,7 @@ import './window-resize'
 import './model-list'
 import './click'
 import './assessment'
+import './mobile-sync'
 import { createWindow } from './main-window'
 import { initAutoUpdater } from './auto-updater'
 import { applyDockVisibility } from './settings'
@@ -76,9 +77,10 @@ app.whenReady().then(async () => {
     })
   })
 
-  // Auto-approve microphone access so users can enumerate and select audio input devices
+  // Auto-approve microphone access so users can enumerate and select audio input devices,
+  // and clipboard writes for the copy buttons (navigator.clipboard.writeText)
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    if (['media', 'microphone', 'audio'].includes(permission)) {
+    if (['media', 'microphone', 'audio', 'clipboard-sanitized-write'].includes(permission)) {
       callback(true)
     } else {
       callback(false)

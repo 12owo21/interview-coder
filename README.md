@@ -259,3 +259,10 @@ npm run build:mac   # macOS 安装包
 - https://github.com/sohzm/cheating-daddy 作者是前段时间在硅谷大热的争议程序员 Soham Parekh
 - https://github.com/pickle-com/glass
 - https://github.com/j4wg/interview-coder-withoupaywall-opensource
+
+
+## 手机同步
+
+已移植上游 `f506378` 的只读手机同步：在「设置 → 手机同步」开启局域网，手机与电脑连接同一 Wi-Fi 后扫码；也可按 [中转部署文档](relay/README.md) 配置自己的公网服务，使用 HTTPS/WSS。两项默认关闭。
+
+同步截图模式的回答和对话模式的提示，不发送截图图片，也不能用手机操作电脑。做题模式暂不支持手机显示，切入后手机保留上一次截图/对话内容，做题页翻页不影响手机。二维码链接等同只读密码；HTTP 为明文传输，泄露时更换二维码或服务器密钥。

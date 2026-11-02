@@ -2,8 +2,9 @@ import { ipcMain } from 'electron'
 
 /**
  * Runs when the page on screen changes. Click-through is suspended while the
- * settings page is up (see `applyIgnoreMouse` in shortcuts.ts), and the
- * toolbar shows the buttons of the mode on screen, so both need to be told.
+ * settings page is up (see `applyIgnoreMouse` in shortcuts.ts), the toolbar
+ * shows the buttons of the mode on screen, and the phones follow that mode, so
+ * all need to be told.
  */
 let onPageChange: (() => void) | null = null
 
@@ -17,7 +18,9 @@ ipcMain.handle('updateAppState', (_event, next: Partial<AppState>) => {
   if (
     state.inSettingsPage !== before.inSettingsPage ||
     state.inConversationPage !== before.inConversationPage ||
-    state.inAssessmentPage !== before.inAssessmentPage
+    state.inAssessmentPage !== before.inAssessmentPage ||
+    // Leaving 对话模式 reports before 截图模式's page does
+    state.inCoderPage !== before.inCoderPage
   ) {
     onPageChange?.()
   }
