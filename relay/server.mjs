@@ -8,7 +8,7 @@ import { createRelay, deriveViewerToken } from './relay.mjs'
  * app's 设置 → 手机同步; see README.md.
  */
 
-const PORT = Number(process.env.PORT) || 8787
+const PORT = Number(process.env.PORT) || 8790
 const RELAY_KEY = process.env.RELAY_KEY || ''
 const MAX_VIEWERS = Number(process.env.MAX_VIEWERS) || 10
 
