@@ -20,7 +20,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
     assessmentFixedPositions,
     assessmentNextPosition,
     assessmentOcrEnabled,
-    assessmentOcrPreviewOnly,
+    // assessmentOcrPreviewOnly,
     assessmentShowOcrDebug,
     updateSetting
   } = useSettingsStore()
