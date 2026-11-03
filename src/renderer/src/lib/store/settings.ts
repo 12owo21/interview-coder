@@ -425,9 +425,9 @@ const defaultSettings: Settings = {
   assessmentFixedClick: false, // 固定坐标开关，开启后优先使用用户配置的选项和下一步位置
   assessmentFixedPositions: { A: null, B: null, C: null, D: null }, // 各选项的屏幕物理像素坐标 { x, y }；null 表示未配置，可增删选项
   assessmentNextPosition: null, // 固定的下一步按钮坐标 { x, y }，单位为屏幕物理像素；null 表示未配置
-  assessmentSmoothMouse: false, // 平滑移动鼠标开关，默认关闭；开启后沿当前实现的直线路径移动
-  assessmentMouseParkingEnabled: false, // 截图前移开鼠标的开关，默认关闭，用于减少选项悬停高亮干扰
-  assessmentMouseParkingRegions: [], // 允许鼠标停放的屏幕区域列表，物理像素坐标；空列表时不启用停放
+  assessmentSmoothMouse: true, // 平滑移动鼠标开关，默认开启；开启后沿当前实现的直线路径移动
+  assessmentMouseParkingEnabled: true, // 答题后随机停放开关，默认开启
+  assessmentMouseParkingRegions: [], // 自定义区域列表；为空时使用当前屏幕 70%～90% 默认区域
   hasConfiguredApi: false, // 是否曾保存过非空 API Key，用于控制首次配置引导是否显示
   apiBaseURL: '', // 当前编辑配置的 API 地址镜像，初始为空；修改应通过配置更新方法同步
   customBaseURLs: [], // 用户自行添加的 API 地址列表，供地址选择器复用
@@ -831,7 +831,6 @@ export const useSettingsStore = create<SettingsStore>()(
         ) {
           state.assessmentMouseParkingRegions = []
         }
-        if (!state.assessmentMouseParkingRegions.length) state.assessmentMouseParkingEnabled = false
         state.ocrFilterMargins = normalizeOcrFilterMargins(state.ocrFilterMargins)
         // Rebuild the presets on every load, so ones added in a later version
         // show up for existing users; the ones the user deleted stay out

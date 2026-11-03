@@ -5,7 +5,29 @@ import loader from './helpers/load-ts.cjs'
 
 const load = loader.createLoader()
 const { LinearMouseMovement } = load('src/main/mouse/linear-movement.ts')
-const { randomParkingPoint } = load('src/main/assessment/mouse-parking.ts')
+const { defaultMouseParkingRegion, randomParkingPoint } = load(
+  'src/main/assessment/mouse-parking.ts'
+)
+
+test('default parking region tracks the current physical display at 70%-90%', () => {
+  const capture = {
+    physicalWidth: 2560,
+    physicalHeight: 1440,
+    originX: 1920,
+    originY: 0
+  }
+  assert.deepEqual(defaultMouseParkingRegion(capture), {
+    id: 'default',
+    left: 3712,
+    top: 1007,
+    right: 4224,
+    bottom: 1296
+  })
+  assert.deepEqual(
+    randomParkingPoint([], capture, () => 0),
+    { x: 3720, y: 1015 }
+  )
+})
 
 test('linear path stays on the segment, progresses in time and reaches exact endpoint', () => {
   const algorithm = new LinearMouseMovement()
@@ -74,7 +96,6 @@ test('parking rejects empty lists, inverted corners, fractions and any out-of-sc
   const capture = { physicalWidth: 1920, physicalHeight: 1080, originX: 0, originY: 0 }
   const valid = { id: 'one', left: 1800, top: 1000, right: 1919, bottom: 1079 }
   for (const regions of [
-    [],
     null,
     [null],
     [{ ...valid, left: -1 }],
@@ -85,6 +106,7 @@ test('parking rejects empty lists, inverted corners, fractions and any out-of-sc
     [valid, { ...valid, id: 'two', bottom: 1080 }]
   ])
     assert.throws(() => randomParkingPoint(regions, capture), /停放区域/)
+  assert.doesNotThrow(() => randomParkingPoint([], capture))
   assert.doesNotThrow(() => randomParkingPoint([valid], capture))
 })
 

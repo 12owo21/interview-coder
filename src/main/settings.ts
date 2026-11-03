@@ -126,7 +126,7 @@ export const settings = {
   } as Record<string, { x: number; y: number } | null>,
   assessmentNextPosition: null as { x: number; y: number } | null,
   assessmentSmoothMouse: false,
-  assessmentMouseParkingEnabled: false,
+  assessmentMouseParkingEnabled: true,
   assessmentMouseParkingRegions: [] as MouseParkingRegion[],
   /** 截图模式's system prompt, from the renderer's active scene */
   customPrompt: '',

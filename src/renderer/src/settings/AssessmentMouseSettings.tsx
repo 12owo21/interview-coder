@@ -57,12 +57,13 @@ export function AssessmentMouseSettings() {
       }
       next.push(region)
     }
-    if (!next.length) updateSetting('assessmentMouseParkingEnabled', false)
     updateSetting('assessmentMouseParkingRegions', next)
     setDrafts(next.map(toDraft))
     setDirty(false)
     setError('')
-    toast.success(next.length ? `已保存 ${next.length} 个停放区域` : '已清除停放区域并关闭随机停放')
+    toast.success(
+      next.length ? `已保存 ${next.length} 个停放区域` : '已清除自定义区域，将使用默认区域'
+    )
   }
   const test = async (): Promise<void> => {
     setBusy(true)
@@ -84,7 +85,7 @@ export function AssessmentMouseSettings() {
     <div className="space-y-3 border-b border-gray-400/40 pb-4">
       <Field
         label="鼠标直线移动"
-        note="默认关闭。开启后，每次点击前和答题后停放时，鼠标沿直线平滑移动。"
+        note="默认开启。开启后，每次点击前和答题后停放时，鼠标沿直线平滑移动。"
       >
         <Switch
           checked={assessmentSmoothMouse}
@@ -94,11 +95,10 @@ export function AssessmentMouseSettings() {
       </Field>
       <Field
         label="答题后随机停放鼠标"
-        note="本轮点击完成后，随机选择一个已保存区域，再随机选择其中的停放点，不点击。"
+        note="默认开启。本轮点击完成后，随机停放到当前屏幕 70%～90% 区域；保存自定义区域后改用自定义区域。"
       >
         <Switch
           checked={assessmentMouseParkingEnabled}
-          disabled={busy || dirty || !regions.length}
           onCheckedChange={(value) => updateSetting('assessmentMouseParkingEnabled', value)}
         />
       </Field>
@@ -155,7 +155,9 @@ export function AssessmentMouseSettings() {
         </div>
       ))}
       {!drafts.length && (
-        <p className="text-xs text-muted-foreground">尚无停放区域，点击“添加区域”输入坐标。</p>
+        <p className="text-xs text-muted-foreground">
+          当前使用默认区域：屏幕宽高的 70%～90%。也可以添加多个自定义区域。
+        </p>
       )}
       {error && (
         <p role="alert" className="text-xs text-red-600">
@@ -180,12 +182,7 @@ export function AssessmentMouseSettings() {
         <Button size="sm" disabled={busy || !dirty} onClick={save}>
           保存区域
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy || dirty || !regions.length}
-          onClick={() => void test()}
-        >
+        <Button size="sm" variant="outline" disabled={busy || dirty} onClick={() => void test()}>
           测试停放（不点击）
         </Button>
       </div>
