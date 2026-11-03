@@ -122,6 +122,7 @@ export default function AssessmentPage() {
           {result?.scoring && <ScoreResultPanel scoring={result.scoring} />}
           {result && (
             <pre className="mt-4 max-h-64 overflow-auto rounded-md bg-black/10 p-3 text-xs">
+              <p className="mt-2 text-xs opacity-80 font-semibold">程序执行计划展示</p>
               {JSON.stringify(result, null, 2)}
             </pre>
           )}

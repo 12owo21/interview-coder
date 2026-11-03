@@ -66,7 +66,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
         </Field>
         {assessmentOcrEnabled && !assessmentFixedClick && (
           <>
-            <Field
+            {/* <Field
               label="仅预览，不点击"
               note="默认关闭；快捷键也只预览一次。确认分组与红点正确后关闭，即可自动点击和循环"
             >
@@ -74,7 +74,7 @@ export function AssessmentSection({ onEditProfile }: { onEditProfile: (id: strin
                 checked={assessmentOcrPreviewOnly}
                 onCheckedChange={(value) => updateSetting('assessmentOcrPreviewOnly', value)}
               />
-            </Field>
+            </Field> */}
             <Field label="显示 OCR 分组图" note="显示原截图、选项框与点击红点；预览模式始终显示">
               <Switch
                 checked={assessmentShowOcrDebug}
